@@ -59,3 +59,66 @@ export function setTheme(theme: LIGHT_DARK_MODE): void {
 export function getStoredTheme(): LIGHT_DARK_MODE {
 	return (localStorage.getItem("theme") as LIGHT_DARK_MODE) || DEFAULT_THEME;
 }
+
+// Background settings
+export function getBackgroundDisabled(): boolean {
+	// Default to true if not set, so background is disabled on startup
+	return localStorage.getItem("backgroundDisabled") !== "false";
+}
+
+export function setBackgroundDisabled(disabled: boolean): void {
+	localStorage.setItem("backgroundDisabled", String(disabled));
+	const r = document.querySelector(":root") as HTMLElement;
+	if (r) {
+		r.classList.toggle("background-disabled", disabled);
+	}
+}
+
+// Rainbow mode settings
+let rainbowInterval: number | null = null;
+let currentHue = 0;
+
+export function getRainbowMode(): boolean {
+	return localStorage.getItem("rainbowMode") === "true";
+}
+
+export function setRainbowMode(enabled: boolean): void {
+	localStorage.setItem("rainbowMode", String(enabled));
+	const root = document.querySelector(":root") as HTMLElement;
+	if (!root) return;
+	
+	root.classList.toggle("rainbow-mode", enabled);
+	
+	// Clear any existing interval
+	if (rainbowInterval) {
+		clearInterval(rainbowInterval);
+		rainbowInterval = null;
+	}
+	
+	if (enabled) {
+		// Start rainbow effect with JavaScript
+		currentHue = parseInt(root.style.getPropertyValue("--hue")) || 0;
+		rainbowInterval = window.setInterval(() => {
+			currentHue = (currentHue + 1) % 360;
+			root.style.setProperty("--hue", String(currentHue));
+		}, 30); // Update every 30ms for smooth effect
+	} else {
+		// Restore the original hue from localStorage
+		const hue = getHue();
+		root.style.setProperty("--hue", String(hue));
+	}
+}
+
+// Background blur settings
+export function getBackgroundBlur(): number {
+	const stored = localStorage.getItem("backgroundBlur");
+	return stored ? Number.parseInt(stored, 10) : 8;
+}
+
+export function setBackgroundBlur(blur: number): void {
+	localStorage.setItem("backgroundBlur", String(blur));
+	const r = document.querySelector(":root") as HTMLElement;
+	if (r) {
+		r.style.setProperty("--background-blur", `${blur}px`);
+	}
+}

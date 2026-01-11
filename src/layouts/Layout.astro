@@ -132,6 +132,17 @@ const bannerOffset =
 			const hue = localStorage.getItem('hue') || configHue;
 			document.documentElement.style.setProperty('--hue', hue);
 
+			// Load background disabled state from local storage
+			const backgroundDisabled = localStorage.getItem('backgroundDisabled') !== 'false';
+			const root = document.documentElement;
+			if (backgroundDisabled) {
+				root.classList.add('background-disabled');
+			}
+
+			// Load background blur from local storage
+			const backgroundBlur = localStorage.getItem('backgroundBlur') || '8';
+			root.style.setProperty('--background-blur', `${backgroundBlur}px`);
+
 			// calculate the --banner-height-extend, which needs to be a multiple of 4 to avoid blurry text
 			let offset = Math.floor(window.innerHeight * (BANNER_HEIGHT_EXTEND / 100));
 			offset = offset - offset % 4;

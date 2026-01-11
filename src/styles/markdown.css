@@ -20,7 +20,7 @@
     }
 
     a:not(.no-styling) {
-        @apply relative bg-none link font-medium text-[var(--primary)]
+        @apply relative bg-none font-medium text-[var(--primary)]
         underline decoration-[var(--link-underline)] decoration-1 decoration-dashed underline-offset-4;
         box-decoration-break: clone;
         -webkit-box-decoration-break: clone;
@@ -61,7 +61,30 @@
 
     .copy-btn {
         all: initial;
-        @apply btn-regular-dark opacity-0 shadow-lg shadow-black/50 absolute active:scale-90 h-8 w-8 top-3 right-3 text-sm rounded-lg transition-all ease-in-out z-20 cursor-pointer;
+        @apply opacity-0 shadow-lg shadow-black/50 absolute active:scale-90 h-8 w-8 top-3 right-3 text-sm rounded-lg transition-all ease-in-out z-20 cursor-pointer;
+        @apply flex items-center justify-center;
+        background-color: oklch(0.45 0.01 var(--hue));
+        &:hover {
+            background-color: oklch(0.50 0.01 var(--hue));
+        }
+        &:active {
+            background-color: oklch(0.55 0.01 var(--hue));
+        }
+        .dark & {
+            background-color: oklch(0.30 0.02 var(--hue));
+            &:hover {
+                background-color: oklch(0.35 0.03 var(--hue));
+            }
+            &:active {
+                background-color: oklch(0.40 0.03 var(--hue));
+            }
+        }
+        &.success {
+            background-color: oklch(0.75 0.14 var(--hue));
+            .dark & {
+                background-color: oklch(0.75 0.14 var(--hue));
+            }
+        }
     }
     .frame:hover .copy-btn {
         opacity: 1;

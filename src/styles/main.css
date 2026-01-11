@@ -150,3 +150,77 @@
     }
   }
 }
+
+/* Background setup with smooth transitions */
+:root {
+  background-color: black;
+  min-height: 100vh;
+}
+
+/* Remove backdrop-filter for better performance */
+body {
+  /* Ensure proper height */
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  /* Prevent body from scrolling independently */
+  overflow-x: hidden;
+}
+
+/* Background image container */
+:root::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('1.webp');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  /* Apply background blur effect */
+  filter: blur(var(--background-blur));
+  /* Set initial state based on backgroundDisabled setting */
+  opacity: 0;
+  /* Fast smooth transition for opacity */
+  transition: opacity 0.2s ease-out, filter 0.2s ease-out;
+  /* Ensure it's behind content */
+  z-index: -1;
+}
+
+/* Show background image when not disabled */
+:root:not(.background-disabled)::before {
+  opacity: 1;
+}
+
+/* Dark mode background */
+:root.dark:not(.background-disabled)::before {
+  /* Add slight dark overlay for dark mode */
+  opacity: 0.8;
+}
+
+/* Background settings */
+/* Smooth transition between image and black */
+:root.background-disabled {
+  /* Solid black background */
+  background-color: black;
+  /* Ensure transition is applied */
+  transition: background-color 0.2s ease-out;
+}
+
+/* Hide background image when disabled */
+:root.background-disabled::before {
+  opacity: 0;
+}
+
+/* Rainbow mode - simplified, using JavaScript for smooth transitions */
+:root.rainbow-mode {
+  /* JavaScript will handle the hue changes */
+}
+
+/* Background blur */
+:root {
+  --background-blur: 8px;
+}
