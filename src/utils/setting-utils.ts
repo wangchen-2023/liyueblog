@@ -62,8 +62,8 @@ export function getStoredTheme(): LIGHT_DARK_MODE {
 
 // Background settings
 export function getBackgroundDisabled(): boolean {
-	// Default to true if not set, so background is disabled on startup
-	return localStorage.getItem("backgroundDisabled") !== "false";
+	// Default to false if not set, so background is enabled on startup
+	return localStorage.getItem("backgroundDisabled") === "true";
 }
 
 export function setBackgroundDisabled(disabled: boolean): void {
