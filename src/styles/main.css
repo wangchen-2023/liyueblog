@@ -168,6 +168,12 @@ body {
 }
 
 /* Background image container */
+:root {
+  /* Default background image */
+  --background-image: url('/background/1.webp');
+}
+
+/* Background layer for images */
 :root::before {
   content: '';
   position: fixed;
@@ -175,7 +181,7 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  background-image: url('1.webp');
+  background-image: var(--background-image);
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
@@ -184,19 +190,33 @@ body {
   filter: blur(var(--background-blur));
   /* Set initial state based on backgroundDisabled setting */
   opacity: 0;
-  /* Fast smooth transition for opacity */
-  transition: opacity 0.2s ease-out, filter 0.2s ease-out;
+  /* Smooth transition for opacity and background image */
+  transition: opacity 0.5s ease-in-out, filter 0.2s ease-out;
   /* Ensure it's behind content */
-  z-index: -1;
+  z-index: -2;
 }
 
-/* Show background image when not disabled */
-:root:not(.background-disabled)::before {
+/* Video background styles */
+#background-video {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Apply background blur effect */
+  filter: blur(var(--background-blur));
+  /* Ensure it's behind content but above image background */
+  z-index: -1;
+  /* Smooth transition for opacity */
+  transition: opacity 0.5s ease-in-out, filter 0.2s ease-out;
+  /* Ensure video is visible */
   opacity: 1;
 }
 
 /* Dark mode background */
-:root.dark:not(.background-disabled)::before {
+:root.dark.background-active::before,
+:root.dark.background-active #background-video {
   /* Add slight dark overlay for dark mode */
   opacity: 0.8;
 }
@@ -207,12 +227,19 @@ body {
   /* Solid black background */
   background-color: black;
   /* Ensure transition is applied */
-  transition: background-color 0.2s ease-out;
+  transition: background-color 0.5s ease-out;
 }
 
-/* Hide background image when disabled */
-:root.background-disabled::before {
+/* Hide background elements when disabled */
+:root.background-disabled::before,
+:root.background-disabled #background-video {
   opacity: 0;
+}
+
+/* Show background elements when active */
+:root.background-active::before,
+:root.background-active #background-video {
+  opacity: 1;
 }
 
 /* Rainbow mode - simplified, using JavaScript for smooth transitions */

@@ -133,15 +133,107 @@ const bannerOffset =
 			document.documentElement.style.setProperty('--hue', hue);
 
 			// Load background disabled state from local storage
-			const backgroundDisabled = localStorage.getItem('backgroundDisabled') !== 'false';
+			// Default to enabled (false) if not set
+			const backgroundDisabled = localStorage.getItem('backgroundDisabled') === 'true';
 			const root = document.documentElement;
+			
+			// Apply background disabled state
 			if (backgroundDisabled) {
 				root.classList.add('background-disabled');
+			} else {
+				root.classList.remove('background-disabled');
 			}
 
 			// Load background blur from local storage
 			const backgroundBlur = localStorage.getItem('backgroundBlur') || '8';
 			root.style.setProperty('--background-blur', `${backgroundBlur}px`);
+
+			// Randomly select a background on page load with smooth transition
+			const backgrounds = [
+				{ src: '/background/1.webp', type: 'image' },
+				{ src: '/background/2.webp', type: 'image' },
+				{ src: '/background/3.webp', type: 'image' },
+				{ src: '/background/4.webp', type: 'image' },
+				{ src: '/background/5.webp', type: 'image' },
+				{ src: '/background/rain.mp4', type: 'video' }
+			];
+			
+			// Note: To add video backgrounds, you can use the following format:
+			// { src: '/background/video1.mp4', type: 'video' }
+			// And place your video files in the public/background directory
+			
+			// To add GIF backgrounds, use:
+			// { src: '/background/animation.gif', type: 'image' }
+			
+			// For smooth transition, we'll use a fade-in effect
+			// The CSS transition will handle the smooth appearance
+			const randomIndex = Math.floor(Math.random() * backgrounds.length);
+			const selectedBackground = backgrounds[randomIndex];
+			console.log('Using random background:', selectedBackground);
+			
+			// Create a function to handle background setup
+			function setupBackground() {
+				// Check if document.body exists
+				if (!document.body) {
+					console.error('document.body is null, cannot add video background');
+					// Try again later
+					setTimeout(setupBackground, 100);
+					return;
+				}
+				
+				// Remove any existing video background
+				const existingVideo = document.getElementById('background-video');
+				if (existingVideo) {
+					existingVideo.remove();
+				}
+				
+				// Clear any existing background image
+				root.style.setProperty('--background-image', 'none');
+				
+				if (selectedBackground.type === 'video') {
+					// Create video element for video background
+					const video = document.createElement('video');
+					video.id = 'background-video';
+					video.src = selectedBackground.src;
+					video.autoplay = true;
+					video.loop = true;
+					video.muted = true;
+					video.playsInline = true;
+					video.preload = 'auto';
+					
+					// Add video to document
+					document.body.appendChild(video);
+					
+					// Debug: Check if video was created
+					console.log('Video element created:', video);
+					console.log('Video src:', video.src);
+					console.log('Video in DOM:', document.getElementById('background-video'));
+					
+					// Force video to play
+					video.play().catch(e => {
+						console.error('Video play failed:', e);
+					});
+				} else {
+					// Set the background image for static or GIF backgrounds
+					root.style.setProperty('--background-image', `url('${selectedBackground.src}')`);
+				}
+				
+				// Apply background state
+				if (backgroundDisabled) {
+					root.classList.add('background-disabled');
+					root.classList.remove('background-active');
+				} else {
+					root.classList.remove('background-disabled');
+					root.classList.add('background-active');
+				}
+			}
+			
+			// Check if DOM is loaded before setting up background
+			if (document.readyState === 'loading') {
+				document.addEventListener('DOMContentLoaded', setupBackground);
+			} else {
+				setupBackground();
+			}
 
 			// calculate the --banner-height-extend, which needs to be a multiple of 4 to avoid blurry text
 			let offset = Math.floor(window.innerHeight * (BANNER_HEIGHT_EXTEND / 100));

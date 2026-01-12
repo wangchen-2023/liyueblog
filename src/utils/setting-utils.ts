@@ -44,7 +44,7 @@ export function applyThemeToDocument(theme: LIGHT_DARK_MODE) {
 			break;
 	}
 
-	// Set the theme for Expressive Code
+	// Set to theme for Expressive Code
 	document.documentElement.setAttribute(
 		"data-theme",
 		expressiveCodeConfig.theme,
@@ -71,6 +71,15 @@ export function setBackgroundDisabled(disabled: boolean): void {
 	const r = document.querySelector(":root") as HTMLElement;
 	if (r) {
 		r.classList.toggle("background-disabled", disabled);
+		if (!disabled) {
+			// Add background-active class to trigger the fade-in transition
+			setTimeout(() => {
+				r.classList.add("background-active");
+			}, 50);
+		} else {
+			// Remove background-active class to trigger the fade-out transition
+			r.classList.remove("background-active");
+		}
 	}
 }
 
