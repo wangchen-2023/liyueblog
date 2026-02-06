@@ -2,6 +2,9 @@
 import I18nKey from "@i18n/i18nKey";
 import { i18n } from "@i18n/translation";
 import Icon from "@iconify/svelte";
+import { onMount } from "svelte";
+import { fade, scale } from "svelte/transition";
+import { cubicOut } from "svelte/easing";
 import { 
     getDefaultHue, 
     getHue, 
@@ -10,15 +13,29 @@ import {
     setBackgroundDisabled,
     getRainbowMode,
     setRainbowMode,
+    getRainMode,
+    setRainMode,
+    getRainConfig,
+    setRainConfig,
     getBackgroundBlur,
-    setBackgroundBlur
+    setBackgroundBlur,
+    type RainConfig
 } from "@utils/setting-utils";
 
 let hue = getHue();
 const defaultHue = getDefaultHue();
 let backgroundDisabled = getBackgroundDisabled();
 let rainbowMode = getRainbowMode();
+let rainMode = getRainMode();
+let rainConfig: RainConfig = getRainConfig();
 let backgroundBlur = getBackgroundBlur();
+let rainPanelOpen = false;
+let portalHost: HTMLDivElement | null = null;
+let countSlider: HTMLInputElement | null = null;
+let widthSlider: HTMLInputElement | null = null;
+let lengthSlider: HTMLInputElement | null = null;
+let speedSlider: HTMLInputElement | null = null;
+let angleSlider: HTMLInputElement | null = null;
 
 function resetHue() {
 	hue = getDefaultHue();
@@ -30,7 +47,51 @@ $: if (hue || hue === 0) {
 
 $: setBackgroundDisabled(backgroundDisabled);
 $: setRainbowMode(rainbowMode);
+$: setRainMode(rainMode);
 $: setBackgroundBlur(backgroundBlur);
+$: if (!rainMode && rainPanelOpen) {
+    rainPanelOpen = false;
+}
+
+onMount(() => {
+    if (!portalHost || typeof document === "undefined") return;
+    document.body.appendChild(portalHost);
+    return () => {
+        if (portalHost?.parentNode) {
+            portalHost.parentNode.removeChild(portalHost);
+        }
+    };
+});
+
+function handleWindowKeydown(event: KeyboardEvent) {
+    if (event.key !== "Escape") return;
+    if (!rainPanelOpen) return;
+    rainPanelOpen = false;
+}
+
+function updateRainConfig(key: keyof RainConfig, event: Event) {
+    const input = event.currentTarget as HTMLInputElement | null;
+    if (!input) return;
+    const value = input.valueAsNumber;
+    if (Number.isNaN(value)) return;
+    const nextValue = key === "count" ? Math.round(value) : value;
+    rainConfig = { ...rainConfig, [key]: nextValue };
+    setRainConfig(rainConfig);
+    updateRangeFill(input, nextValue);
+}
+
+function formatRainValue(value: number, decimals: number): string {
+    return Number(value.toFixed(decimals)).toString();
+}
+
+function updateRangeFill(input: HTMLInputElement | null, valueOverride?: number) {
+    if (!input) return;
+    const min = Number(input.min || "0");
+    const max = Number(input.max || "100");
+    const value = typeof valueOverride === "number" ? valueOverride : Number(input.value);
+    const percent = ((value - min) / (max - min)) * 100;
+    input.style.setProperty("--slider-value", `${percent}%`);
+}
 
 // Update background blur slider fill effect
 let backgroundBlurSlider: HTMLInputElement;
@@ -39,7 +100,15 @@ $: if (backgroundBlurSlider) {
     const percentage = (backgroundBlur / 20) * 100;
     backgroundBlurSlider.style.setProperty('--slider-value', `${percentage}%`);
 }
+
+$: if (countSlider) updateRangeFill(countSlider, rainConfig.count);
+$: if (widthSlider) updateRangeFill(widthSlider, rainConfig.width);
+$: if (lengthSlider) updateRangeFill(lengthSlider, rainConfig.length);
+$: if (speedSlider) updateRangeFill(speedSlider, rainConfig.speed);
+$: if (angleSlider) updateRangeFill(angleSlider, rainConfig.angle);
 </script>
+
+<svelte:window on:keydown={handleWindowKeydown} />
 
 <div id="display-setting" class="float-panel float-panel-closed absolute transition-all w-80 right-4 px-4 py-4">
     <!-- Theme Color -->
@@ -104,6 +173,28 @@ $: if (backgroundBlurSlider) {
         </div>
     </div>
 
+    <!-- Rain Effect -->
+    <div class="mb-4">
+        <div class="flex flex-row gap-2 items-center justify-between mb-3">
+            <div class="font-bold text-lg text-neutral-900 dark:text-neutral-100 transition relative ml-3 flex items-center gap-2
+                before:w-1 before:h-4 before:rounded-md before:bg-[var(--primary)]
+                before:absolute before:-left-3 before:top-[0.33rem]">
+                要下雨吗
+                <button type="button" class="btn-plain w-6 h-6 rounded-md" aria-label="Rain Effect Settings" on:click={() => { if (!rainMode) rainMode = true; rainPanelOpen = true; }}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" class="w-4 h-4">
+                        <path fill="currentColor" d="M19.14,12.94c0.04-0.31,0.06-0.63,0.06-0.94s-0.02-0.63-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.11-0.2-0.36-0.28-0.57-0.22l-2.39,0.96c-0.5-0.38-1.04-0.7-1.64-0.94l-0.36-2.54C14.34,2.38,14.12,2.2,13.87,2.2h-3.74c-0.25,0-0.47,0.18-0.5,0.42l-0.36,2.54c-0.6,0.24-1.14,0.56-1.64,0.94l-2.39-0.96c-0.22-0.06-0.46,0.02-0.57,0.22L2.75,8.68c-0.11,0.2-0.06,0.47,0.12,0.61l2.03,1.58C4.86,11.17,4.84,11.49,4.84,11.8s0.02,0.63,0.06,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.11,0.2,0.36,0.28,0.57,0.22l2.39-0.96c0.5,0.38,1.04,0.7,1.64,0.94l0.36,2.54c0.03,0.24,0.25,0.42,0.5,0.42h3.74c0.25,0,0.47-0.18,0.5-0.42l0.36-2.54c0.6-0.24,1.14-0.56,1.64-0.94l2.39,0.96c0.22,0.06,0.46-0.02,0.57-0.22l1.92-3.32c0.11-0.2,0.06-0.47-0.12-0.61l-2.03-1.58ZM12,15.6c-1.99,0-3.6-1.61-3.6-3.6S10.01,8.4,12,8.4s3.6,1.61,3.6,3.6S13.99,15.6,12,15.6Z"/>
+                    </svg>
+                </button>
+            </div>
+            <button class="relative inline-flex h-7 w-12 items-center rounded-full bg-[var(--btn-regular-bg)] transition-colors duration-200 ease-in-out"
+                    class:bg-[var(--primary)]={rainMode}
+                    on:click={() => rainMode = !rainMode}>
+                <span class="inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-200 ease-in-out"
+                      class:translate-x-5={rainMode}></span>
+            </button>
+        </div>
+    </div>
+
     <!-- Background Blur -->
     <div class="mb-4">
         <div class="flex flex-row gap-2 mb-3 items-center justify-between">
@@ -123,6 +214,42 @@ $: if (backgroundBlurSlider) {
                    bind:this={backgroundBlurSlider}>
         </div>
     </div>
+</div>
+
+<div bind:this={portalHost}>
+    {#if rainPanelOpen}
+        <div class="rain-config-overlay" on:click={() => rainPanelOpen = false} transition:fade={{ duration: 180, easing: cubicOut }}>
+            <div class="rain-config-panel card-base" role="dialog" aria-modal="true" aria-label="Rain Effect Settings" on:click|stopPropagation
+                 transition:scale={{ duration: 200, easing: cubicOut, start: 0.96 }}>
+                <div class="rain-config-header">
+                    <h3>雨幕参数调节</h3>
+                    <button type="button" class="rain-config-close" aria-label="Close" on:click={() => rainPanelOpen = false}>
+                        x
+                    </button>
+                </div>
+                <div class="control-group">
+                    <label>数量 (Count) <span class="value-display">{formatRainValue(rainConfig.count, 0)}</span></label>
+                    <input type="range" min="10" max="1000" value={rainConfig.count} on:input={(event) => updateRainConfig("count", event)} bind:this={countSlider}>
+                </div>
+                <div class="control-group">
+                    <label>雨丝粗细 (Width) <span class="value-display">{formatRainValue(rainConfig.width, 1)}</span></label>
+                    <input type="range" min="0.5" max="5" step="0.1" value={rainConfig.width} on:input={(event) => updateRainConfig("width", event)} bind:this={widthSlider}>
+                </div>
+                <div class="control-group">
+                    <label>雨丝长度 (Length) <span class="value-display">{formatRainValue(rainConfig.length, 0)}</span></label>
+                    <input type="range" min="5" max="120" value={rainConfig.length} on:input={(event) => updateRainConfig("length", event)} bind:this={lengthSlider}>
+                </div>
+                <div class="control-group">
+                    <label>下落速度 (Speed) <span class="value-display">{formatRainValue(rainConfig.speed, 0)}</span></label>
+                    <input type="range" min="5" max="60" value={rainConfig.speed} on:input={(event) => updateRainConfig("speed", event)} bind:this={speedSlider}>
+                </div>
+                <div class="control-group">
+                    <label>风向/倾斜 (Angle) <span class="value-display">{formatRainValue(rainConfig.angle, 2)}</span></label>
+                    <input type="range" min="-0.8" max="0.8" step="0.01" value={rainConfig.angle} on:input={(event) => updateRainConfig("angle", event)} bind:this={angleSlider}>
+                </div>
+            </div>
+        </div>
+    {/if}
 </div>
 
 
@@ -266,5 +393,130 @@ $: if (backgroundBlurSlider) {
           border-radius 0.125rem
           background-image linear-gradient(to right, var(--primary) var(--slider-value, 0%), #374151 var(--slider-value, 0%))
           color transparent
+
+    .rain-config-overlay
+      position fixed
+      top 0
+      left 0
+      right 0
+      bottom 0
+      display flex
+      align-items center
+      justify-content center
+      background transparent
+      z-index 9999
+
+    /* 移除导航栏绑定 */
+    /* :global(.rain-config-open #navbar)
+      transform none !important
+      opacity 1 !important
+    */
+
+    .rain-config-panel
+      width 420px
+      max-width 92vw
+      padding 22px
+      background linear-gradient(180deg, rgba(16, 23, 28, 0.96) 0%, rgba(11, 16, 20, 0.98) 100%)
+      border 1px solid rgba(255, 255, 255, 0.08)
+      border-radius 18px
+      color #e5e7eb
+      box-shadow 0 20px 60px rgba(0, 0, 0, 0.45)
+      backdrop-filter blur(14px)
+      will-change transform, opacity
+
+      .control-group
+        margin-bottom 16px
+
+      label
+        display flex
+        align-items center
+        justify-content space-between
+        font-size 15px
+        margin-bottom 10px
+        color #e5e7eb
+
+      input
+        width 100%
+        cursor pointer
+        accent-color #5ec8ff
+
+      .value-display
+        color #7dd3fc
+        font-weight 600
+
+    .rain-config-header
+      display flex
+      align-items center
+      justify-content space-between
+      margin-bottom 14px
+
+      h3
+        margin 0
+        font-size 18px
+        font-weight 700
+        color #f9fafb
+
+    .rain-config-close
+      width 28px
+      height 28px
+      border-radius 8px
+      border 0
+      color #cbd5f5
+      background rgba(255, 255, 255, 0.06)
+      display inline-flex
+      align-items center
+      justify-content center
+      transition background 0.15s ease-out, color 0.15s ease-out
+
+      &:hover
+        background rgba(255, 255, 255, 0.14)
+        color #ffffff
+
+    .rain-config-panel input[type="range"]
+      -webkit-appearance none
+      height 0.5rem
+      border-radius 0.375rem
+      background-image linear-gradient(to right, #53bde9 var(--slider-value, 0%), #374151 var(--slider-value, 0%))
+      border none
+      outline none
+      box-shadow none
+
+      &::-webkit-slider-runnable-track
+        height 0.5rem
+        border-radius 0.375rem
+        background-image linear-gradient(to right, #53bde9 var(--slider-value, 0%), #374151 var(--slider-value, 0%))
+
+      &::-moz-range-track
+        height 0.5rem
+        border-radius 0.375rem
+        background-image linear-gradient(to right, #53bde9 var(--slider-value, 0%), #374151 var(--slider-value, 0%))
+
+      &::-ms-track
+        height 0.5rem
+        border-radius 0.375rem
+        background-image linear-gradient(to right, #53bde9 var(--slider-value, 0%), #374151 var(--slider-value, 0%))
+        color transparent
+
+      &::-webkit-slider-thumb
+        -webkit-appearance none
+        width 1rem
+        height 1rem
+        border-radius 0.375rem
+        background #7dd3fc
+        margin-top -0.25rem
+        box-shadow 0 0 0 2px rgba(0, 0, 0, 0.35)
+
+      &::-moz-range-thumb
+        width 1rem
+        height 1rem
+        border-radius 0.375rem
+        background #7dd3fc
+        border none
+
+      &::-ms-thumb
+        width 1rem
+        height 1rem
+        border-radius 0.375rem
+        background #7dd3fc
 
 </style>

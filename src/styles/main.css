@@ -193,7 +193,7 @@ body {
   /* Smooth transition for opacity and background image */
   transition: opacity 0.5s ease-in-out, filter 0.2s ease-out;
   /* Ensure it's behind content */
-  z-index: -2;
+  z-index: -3;
 }
 
 /* Video background styles */
@@ -207,7 +207,7 @@ body {
   /* Apply background blur effect */
   filter: blur(var(--background-blur));
   /* Ensure it's behind content but above image background */
-  z-index: -1;
+  z-index: -2;
   /* Smooth transition for opacity */
   transition: opacity 0.5s ease-in-out, filter 0.2s ease-out;
   /* Ensure video is visible */
