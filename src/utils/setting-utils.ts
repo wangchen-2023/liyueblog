@@ -6,6 +6,11 @@ import {
 } from "@constants/constants.ts";
 import { expressiveCodeConfig } from "@/config";
 import type { LIGHT_DARK_MODE } from "@/types/config";
+import {
+	BACKGROUND_OPTIONS,
+	clampBackgroundIndex,
+	normalizeBackgroundIndex,
+} from "@utils/background-utils";
 
 function canUseStorage(): boolean {
 	return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -253,5 +258,38 @@ export function setBackgroundBlur(blur: number): void {
 	const r = document.querySelector(":root") as HTMLElement;
 	if (r) {
 		r.style.setProperty("--background-blur", `${blur}px`);
+	}
+}
+
+// Background image selection
+const BACKGROUND_INDEX_KEY = "backgroundIndex";
+
+export function getStoredBackgroundIndex(): number | null {
+	if (!canUseStorage()) {
+		return null;
+	}
+	const stored = localStorage.getItem(BACKGROUND_INDEX_KEY);
+	if (!stored) {
+		return null;
+	}
+	const parsed = Number.parseInt(stored, 10);
+	if (Number.isNaN(parsed) || BACKGROUND_OPTIONS.length === 0) {
+		return null;
+	}
+	return clampBackgroundIndex(parsed);
+}
+
+export function setBackgroundIndex(index: number): void {
+	if (!canUseStorage() || BACKGROUND_OPTIONS.length === 0) {
+		return;
+	}
+	const normalized = normalizeBackgroundIndex(index);
+	localStorage.setItem(BACKGROUND_INDEX_KEY, String(normalized));
+	if (typeof window !== "undefined") {
+		window.dispatchEvent(
+			new CustomEvent("background-selection-change", {
+				detail: { index: normalized },
+			}),
+		);
 	}
 }

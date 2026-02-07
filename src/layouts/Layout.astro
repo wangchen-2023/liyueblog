@@ -7,6 +7,7 @@ import ConfigCarrier from "@components/ConfigCarrier.astro";
 import Lantern from "@components/widget/Lantern.svelte";
 import RainEffect from "@components/widget/RainEffect.svelte";
 import { profileConfig, siteConfig } from "@/config";
+import { BACKGROUND_OPTIONS } from "@utils/background-utils";
 import {
 	AUTO_MODE,
 	BANNER_HEIGHT,
@@ -112,7 +113,7 @@ const bannerOffset =
 		))}
 
 		<!-- Set the theme before the page is rendered to avoid a flash -->
-		<script is:inline define:vars={{DEFAULT_THEME, LIGHT_MODE, DARK_MODE, AUTO_MODE, BANNER_HEIGHT_EXTEND, PAGE_WIDTH, configHue}}>
+		<script is:inline define:vars={{DEFAULT_THEME, LIGHT_MODE, DARK_MODE, AUTO_MODE, BANNER_HEIGHT_EXTEND, PAGE_WIDTH, configHue, backgrounds: BACKGROUND_OPTIONS}}>
 			// Load the theme from local storage
 			const theme = localStorage.getItem('theme') || DEFAULT_THEME;
 			switch (theme) {
@@ -136,11 +137,11 @@ const bannerOffset =
 
 			// Load background disabled state from local storage
 			// Default to enabled (false) if not set
-			const backgroundDisabled = localStorage.getItem('backgroundDisabled') === 'true';
 			const root = document.documentElement;
-			
-			// Apply background disabled state
-			if (backgroundDisabled) {
+			const getBackgroundDisabledState = () => localStorage.getItem('backgroundDisabled') === 'true';
+
+			// Apply background disabled state early to avoid flash
+			if (getBackgroundDisabledState()) {
 				root.classList.add('background-disabled');
 			} else {
 				root.classList.remove('background-disabled');
@@ -150,15 +151,8 @@ const bannerOffset =
 			const backgroundBlur = localStorage.getItem('backgroundBlur') || '8';
 			root.style.setProperty('--background-blur', `${backgroundBlur}px`);
 
-			// Randomly select a background on page load with smooth transition
-			const backgrounds = [
-				{ src: '/background/1.webp', type: 'image' },
-				{ src: '/background/2.webp', type: 'image' },
-				{ src: '/background/3.webp', type: 'image' },
-				{ src: '/background/4.webp', type: 'image' },
-				{ src: '/background/5.webp', type: 'image' },
-				{ src: '/background/rain.mp4', type: 'video' }
-			];
+			// Background selection (stable across Swup navigation, changes on full refresh unless user chooses a fixed one)
+			// Background list is defined in src/utils/background-utils.ts
 			
 			// Note: To add video backgrounds, you can use the following format:
 			// { src: '/background/video1.mp4', type: 'video' }
@@ -169,10 +163,210 @@ const bannerOffset =
 			
 			// For smooth transition, we'll use a fade-in effect
 			// The CSS transition will handle the smooth appearance
-			const randomIndex = Math.floor(Math.random() * backgrounds.length);
-			const selectedBackground = backgrounds[randomIndex];
-			console.log('Using random background:', selectedBackground);
+			const clampIndex = (index) => {
+				if (!backgrounds.length) return -1;
+				return Math.min(backgrounds.length - 1, Math.max(0, index));
+			};
+
+			const normalizeIndex = (index) => {
+				if (!backgrounds.length) return -1;
+				return ((index % backgrounds.length) + backgrounds.length) % backgrounds.length;
+			};
+
+			const storedBackgroundIndexRaw = localStorage.getItem('backgroundIndex');
+			let storedBackgroundIndex = null;
+			if (storedBackgroundIndexRaw !== null) {
+				const parsed = Number.parseInt(storedBackgroundIndexRaw, 10);
+				if (!Number.isNaN(parsed) && backgrounds.length) {
+					storedBackgroundIndex = clampIndex(parsed);
+				}
+			}
+
+			let selectedBackground;
+			let selectedIndex = -1;
+
+			const restoreFromGlobal = () => {
+				const existingIndex = window.__bgSelectionIndex;
+				const existingBackground = window.__bgSelection;
+
+				if (typeof existingIndex === 'number' && backgrounds[existingIndex]) {
+					const candidate = backgrounds[existingIndex];
+					if (!existingBackground || (existingBackground.src === candidate.src && existingBackground.type === candidate.type)) {
+						return { index: existingIndex, background: candidate };
+					}
+				}
+
+				if (existingBackground && typeof existingBackground.src === 'string' && typeof existingBackground.type === 'string') {
+					const idx = backgrounds.findIndex(bg => bg.src === existingBackground.src && bg.type === existingBackground.type);
+					if (idx >= 0) {
+						return { index: idx, background: backgrounds[idx] };
+					}
+				}
+
+				return null;
+			};
+
+			if (storedBackgroundIndex !== null) {
+				selectedIndex = storedBackgroundIndex;
+				selectedBackground = backgrounds[selectedIndex];
+			} else {
+				const globalSelection = restoreFromGlobal();
+				if (globalSelection) {
+					selectedIndex = globalSelection.index;
+					selectedBackground = globalSelection.background;
+				}
+
+				if (!selectedBackground && backgrounds.length) {
+					selectedIndex = Math.floor(Math.random() * backgrounds.length);
+					selectedBackground = backgrounds[selectedIndex];
+				}
+			}
+
+			if (selectedBackground) {
+				// Store in window so Swup navigations keep it.
+				window.__bgSelectionIndex = selectedIndex;
+				window.__bgSelection = selectedBackground;
+			}
+			console.log('Using background:', selectedBackground);
 			
+			let backgroundLayerInitialized = false;
+			let activeImageSrc = null;
+			let backgroundImageSwapToken = 0;
+			let backgroundVideoSwapToken = 0;
+
+			const ensureInitialBackgroundLayer = (src) => {
+				if (!src) return;
+				root.style.setProperty('--background-image-a', `url('${src}')`);
+				root.style.setProperty('--background-image-b', 'none');
+				root.classList.add('background-layer-a');
+				root.classList.remove('background-layer-b');
+				backgroundLayerInitialized = true;
+			};
+
+			const crossfadeToImage = (src) => {
+				if (!src) return;
+				if (!backgroundLayerInitialized) {
+					ensureInitialBackgroundLayer(src);
+					activeImageSrc = src;
+					return;
+				}
+
+				const isLayerA = root.classList.contains('background-layer-a');
+				if (isLayerA) {
+					root.style.setProperty('--background-image-b', `url('${src}')`);
+					root.classList.remove('background-layer-a');
+					root.classList.add('background-layer-b');
+				} else {
+					root.style.setProperty('--background-image-a', `url('${src}')`);
+					root.classList.remove('background-layer-b');
+					root.classList.add('background-layer-a');
+				}
+				activeImageSrc = src;
+			};
+
+			const applyImageBackground = (src, onApplied) => {
+				if (!src) return;
+				if (backgroundLayerInitialized && activeImageSrc === src) {
+					if (typeof onApplied === 'function') {
+						onApplied();
+					}
+					return;
+				}
+				const token = ++backgroundImageSwapToken;
+				const img = new Image();
+				img.onload = () => {
+					if (token !== backgroundImageSwapToken) return;
+					crossfadeToImage(src);
+					if (typeof onApplied === 'function') {
+						onApplied();
+					}
+				};
+				img.onerror = () => {
+					if (token !== backgroundImageSwapToken) return;
+					crossfadeToImage(src);
+					if (typeof onApplied === 'function') {
+						onApplied();
+					}
+				};
+				img.src = src;
+			};
+
+			const removeVideoElement = (video) => {
+				if (!video) return;
+				video.classList.add('background-video-exit');
+				setTimeout(() => {
+					if (video?.parentNode) {
+						video.parentNode.removeChild(video);
+					}
+				}, 520);
+			};
+
+			const createVideoElement = (src) => {
+				const video = document.createElement('video');
+				video.className = 'background-video background-video-prep';
+				video.id = 'background-video-next';
+				video.dataset.src = src;
+				video.autoplay = true;
+				video.loop = true;
+				video.muted = true;
+				video.playsInline = true;
+				video.preload = 'auto';
+				video.src = src;
+				return video;
+			};
+
+			const applyVideoBackground = (src) => {
+				if (!src) return;
+				const nextToken = ++backgroundVideoSwapToken;
+
+				const currentActive = document.getElementById('background-video');
+				if (currentActive && currentActive.dataset.src === src) {
+					root.classList.add('background-video-live');
+					root.classList.remove('background-video-hidden');
+					return;
+				}
+
+				const existingNext = document.getElementById('background-video-next');
+				if (existingNext) {
+					existingNext.remove();
+				}
+
+				const nextVideo = createVideoElement(src);
+				document.body.appendChild(nextVideo);
+
+				let readyHandled = false;
+				const handleReady = () => {
+					if (readyHandled) return;
+					readyHandled = true;
+					if (nextToken !== backgroundVideoSwapToken) {
+						removeVideoElement(nextVideo);
+						return;
+					}
+					if (!selectedBackground || selectedBackground.type !== 'video' || selectedBackground.src !== src) {
+						removeVideoElement(nextVideo);
+						return;
+					}
+
+					root.classList.add('background-video-live');
+					root.classList.remove('background-video-hidden');
+
+					if (currentActive && currentActive !== nextVideo) {
+						currentActive.removeAttribute('id');
+						removeVideoElement(currentActive);
+					}
+
+					nextVideo.classList.remove('background-video-prep');
+					nextVideo.id = 'background-video';
+				};
+
+				nextVideo.addEventListener('canplay', handleReady, { once: true });
+				nextVideo.addEventListener('loadeddata', handleReady, { once: true });
+
+				nextVideo.play().catch(e => {
+					console.error('Video play failed:', e);
+				});
+			};
+
 			// Create a function to handle background setup
 			function setupBackground() {
 				// Check if document.body exists
@@ -182,46 +376,45 @@ const bannerOffset =
 					setTimeout(setupBackground, 100);
 					return;
 				}
-				
-				// Remove any existing video background
-				const existingVideo = document.getElementById('background-video');
-				if (existingVideo) {
-					existingVideo.remove();
+
+				if (!selectedBackground) {
+					return;
 				}
 				
-				// Clear any existing background image
-				root.style.setProperty('--background-image', 'none');
-				
 				if (selectedBackground.type === 'video') {
-					// Create video element for video background
-					const video = document.createElement('video');
-					video.id = 'background-video';
-					video.src = selectedBackground.src;
-					video.autoplay = true;
-					video.loop = true;
-					video.muted = true;
-					video.playsInline = true;
-					video.preload = 'auto';
-					
-					// Add video to document
-					document.body.appendChild(video);
-					
-					// Debug: Check if video was created
-					console.log('Video element created:', video);
-					console.log('Video src:', video.src);
-					console.log('Video in DOM:', document.getElementById('background-video'));
-					
-					// Force video to play
-					video.play().catch(e => {
-						console.error('Video play failed:', e);
-					});
+					backgroundImageSwapToken += 1;
+					const currentActiveVideo = document.getElementById('background-video');
+					if (currentActiveVideo) {
+						root.classList.add('background-video-live');
+						root.classList.remove('background-video-hidden');
+					} else {
+						root.classList.remove('background-video-live');
+						root.classList.remove('background-video-hidden');
+					}
+
+					applyVideoBackground(selectedBackground.src);
 				} else {
-					// Set the background image for static or GIF backgrounds
-					root.style.setProperty('--background-image', `url('${selectedBackground.src}')`);
+					// Set the background image for static or GIF backgrounds with crossfade
+					const existingVideo = document.getElementById('background-video');
+					const pendingVideo = document.getElementById('background-video-next');
+					if (pendingVideo) {
+						pendingVideo.remove();
+					}
+					backgroundVideoSwapToken += 1;
+					applyImageBackground(selectedBackground.src, () => {
+						root.classList.remove('background-video-live');
+						if (existingVideo) {
+							root.classList.add('background-video-hidden');
+							removeVideoElement(existingVideo);
+						} else {
+							root.classList.add('background-video-hidden');
+						}
+					});
 				}
 				
 				// Apply background state
-				if (backgroundDisabled) {
+				const isBackgroundDisabled = getBackgroundDisabledState();
+				if (isBackgroundDisabled) {
 					root.classList.add('background-disabled');
 					root.classList.remove('background-active');
 				} else {
@@ -229,6 +422,23 @@ const bannerOffset =
 					root.classList.add('background-active');
 				}
 			}
+
+			const applyBackgroundSelection = (index) => {
+				if (!backgrounds.length) return;
+				const normalized = normalizeIndex(index);
+				if (normalized < 0 || !backgrounds[normalized]) return;
+				selectedIndex = normalized;
+				selectedBackground = backgrounds[normalized];
+				window.__bgSelectionIndex = selectedIndex;
+				window.__bgSelection = selectedBackground;
+				setupBackground();
+			};
+
+			window.addEventListener('background-selection-change', (event) => {
+				const detail = event?.detail;
+				if (!detail || typeof detail.index !== 'number') return;
+				applyBackgroundSelection(detail.index);
+			});
 			
 			// Check if DOM is loaded before setting up background
 			if (document.readyState === 'loading') {

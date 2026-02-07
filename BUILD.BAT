@@ -1,1 +1,1 @@
-pnpm dev
+pnpm preview

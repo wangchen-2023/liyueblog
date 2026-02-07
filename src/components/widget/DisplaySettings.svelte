@@ -19,8 +19,14 @@ import {
     setRainConfig,
     getBackgroundBlur,
     setBackgroundBlur,
+    getStoredBackgroundIndex,
+    setBackgroundIndex,
     type RainConfig
 } from "@utils/setting-utils";
+import {
+    BACKGROUND_OPTIONS,
+    normalizeBackgroundIndex
+} from "@utils/background-utils";
 
 let hue = getHue();
 const defaultHue = getDefaultHue();
@@ -36,6 +42,11 @@ let widthSlider: HTMLInputElement | null = null;
 let lengthSlider: HTMLInputElement | null = null;
 let speedSlider: HTMLInputElement | null = null;
 let angleSlider: HTMLInputElement | null = null;
+const backgroundCount = BACKGROUND_OPTIONS.length;
+let backgroundIndex = getInitialBackgroundIndex();
+let currentBackground = BACKGROUND_OPTIONS[backgroundIndex] ?? null;
+let backgroundTypeLabel = "";
+let backgroundSwitchTimestamp = 0;
 
 function resetHue() {
 	hue = getDefaultHue();
@@ -54,14 +65,63 @@ $: if (!rainMode && rainPanelOpen) {
 }
 
 onMount(() => {
-    if (!portalHost || typeof document === "undefined") return;
-    document.body.appendChild(portalHost);
+    if (portalHost && typeof document !== "undefined") {
+        document.body.appendChild(portalHost);
+    }
+
+    if (typeof window === "undefined") {
+        return () => {
+            if (portalHost?.parentNode) {
+                portalHost.parentNode.removeChild(portalHost);
+            }
+        };
+    }
+
+    const handleBackgroundChange = (event: Event) => {
+        const detail = (event as CustomEvent<{ index?: number }>).detail;
+        if (!detail || typeof detail.index !== "number") return;
+        backgroundIndex = normalizeBackgroundIndex(detail.index);
+    };
+
+    window.addEventListener("background-selection-change", handleBackgroundChange as EventListener);
     return () => {
         if (portalHost?.parentNode) {
             portalHost.parentNode.removeChild(portalHost);
         }
+        window.removeEventListener("background-selection-change", handleBackgroundChange as EventListener);
     };
 });
+
+function getInitialBackgroundIndex(): number {
+    const stored = getStoredBackgroundIndex();
+    if (typeof stored === "number") {
+        return stored;
+    }
+    if (typeof window !== "undefined") {
+        const win = window as Window & { __bgSelectionIndex?: number };
+        if (typeof win.__bgSelectionIndex === "number") {
+            return normalizeBackgroundIndex(win.__bgSelectionIndex);
+        }
+    }
+    return 0;
+}
+
+function applyBackgroundIndex(nextIndex: number) {
+    if (!backgroundCount) return;
+    const normalized = normalizeBackgroundIndex(nextIndex);
+    backgroundIndex = normalized;
+    setBackgroundIndex(normalized);
+}
+
+function handleBackgroundWheel(event: WheelEvent) {
+    if (!backgroundCount) return;
+    const now = Date.now();
+    if (now - backgroundSwitchTimestamp < 140) return;
+    backgroundSwitchTimestamp = now;
+    if (event.deltaY === 0) return;
+    const direction = event.deltaY > 0 ? 1 : -1;
+    applyBackgroundIndex(backgroundIndex + direction);
+}
 
 function handleWindowKeydown(event: KeyboardEvent) {
     if (event.key !== "Escape") return;
@@ -106,6 +166,10 @@ $: if (widthSlider) updateRangeFill(widthSlider, rainConfig.width);
 $: if (lengthSlider) updateRangeFill(lengthSlider, rainConfig.length);
 $: if (speedSlider) updateRangeFill(speedSlider, rainConfig.speed);
 $: if (angleSlider) updateRangeFill(angleSlider, rainConfig.angle);
+$: currentBackground = BACKGROUND_OPTIONS[backgroundIndex] ?? null;
+$: backgroundTypeLabel = currentBackground
+    ? (currentBackground.type === "video" ? "视频" : "图片")
+    : "--";
 </script>
 
 <svelte:window on:keydown={handleWindowKeydown} />
@@ -212,6 +276,41 @@ $: if (angleSlider) updateRangeFill(angleSlider, rainConfig.angle);
             <input type="range" min="0" max="20" bind:value={backgroundBlur}
                    class="slider" step="1" style="width: 100%"
                    bind:this={backgroundBlurSlider}>
+        </div>
+    </div>
+
+    <!-- Background Image -->
+    <div class="mb-2">
+        <div class="flex flex-row gap-2 mb-3 items-center justify-between">
+            <div class="font-bold text-lg text-neutral-900 dark:text-neutral-100 transition relative ml-3
+                before:w-1 before:h-4 before:rounded-md before:bg-[var(--primary)]
+                before:absolute before:-left-3 before:top-[0.33rem]">
+                背景图片
+            </div>
+            <div class="transition bg-[var(--btn-regular-bg)] w-14 h-7 rounded-md flex justify-center
+            font-bold text-sm items-center text-[var(--btn-content)]">
+                {backgroundCount ? `${backgroundIndex + 1}/${backgroundCount}` : "--"}
+            </div>
+        </div>
+        <div class="w-full select-none flex items-center gap-2" on:wheel|preventDefault={handleBackgroundWheel}>
+            <button class="btn-regular w-8 h-8 rounded-md active:scale-90 disabled:opacity-50 disabled:pointer-events-none"
+                    aria-label="Previous background"
+                    on:click={() => applyBackgroundIndex(backgroundIndex - 1)}
+                    disabled={!backgroundCount}>
+                <Icon icon="fa6-solid:chevron-left" class="text-[0.75rem]"></Icon>
+            </button>
+            <div class="flex-1 h-8 rounded-md bg-[var(--btn-regular-bg)] text-[var(--btn-content)] flex items-center justify-center gap-2 text-sm font-bold"
+                 class:opacity-50={!backgroundCount}
+                 title={currentBackground?.src || ""}>
+                <Icon icon={currentBackground?.type === "video" ? "fa6-solid:video" : "fa6-solid:image"} class="text-[0.75rem]"></Icon>
+                <span>{backgroundTypeLabel}</span>
+            </div>
+            <button class="btn-regular w-8 h-8 rounded-md active:scale-90 disabled:opacity-50 disabled:pointer-events-none"
+                    aria-label="Next background"
+                    on:click={() => applyBackgroundIndex(backgroundIndex + 1)}
+                    disabled={!backgroundCount}>
+                <Icon icon="fa6-solid:chevron-right" class="text-[0.75rem]"></Icon>
+            </button>
         </div>
     </div>
 </div>

@@ -1,0 +1,89 @@
+
+> liyueblog@0.0.1 dev C:\Users\liyueovo\Desktop\liyueblog
+> astro dev
+
+23:49:58 [types] Generated 2ms
+23:49:58 [content] Syncing content
+23:49:58 [content] Synced content
+23:49:58 [vite] Forced re-optimization of dependencies
+23:49:59 [vite] Port 4321 is in use, trying another one...
+
+ astro  v5.13.10 ready in 6288 ms
+
+┃ Local    http://localhost:4322/
+┃ Network  use --host to expose
+
+23:49:59 watching for file changes...
+23:50:37 [200] /about/ 1166ms
+23:50:37 [200] / 872ms
+23:50:37 [200] / 872ms
+23:50:39 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:135:12 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+23:50:39 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:152:12 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+23:50:39 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:174:12 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+23:50:39 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:206:8 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+23:50:39 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:206:8 `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+23:50:39 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:207:12 Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus
+23:50:39 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:207:12 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+23:50:39 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:216:20 A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control
+23:50:39 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:220:20 A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control
+23:50:39 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:224:20 A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control
+23:50:39 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:228:20 A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control
+23:50:39 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:232:20 A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control
+23:50:39 [vite] [32m✨ new dependencies optimized: [33m@swup/astro/serialise, @swup/astro/idle, @swup/astro/client/Swup, @swup/astro/client/SwupA11yPlugin, @swup/astro/client/SwupPreloadPlugin, @swup/astro/client/SwupScrollPlugin, @swup/astro/client/SwupHeadPlugin, @swup/astro/client/SwupScriptsPlugin[32m[39m
+23:50:39 [vite] [32m✨ optimized dependencies changed. reloading[39m
+23:50:39 [200] / 95ms
+23:50:40 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:135:12 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+23:50:40 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:152:12 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+23:50:40 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:174:12 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+23:50:40 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:206:8 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+23:50:40 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:206:8 `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+23:50:40 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:207:12 Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus
+23:50:40 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:207:12 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+23:50:40 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:216:20 A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control
+23:50:40 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:220:20 A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control
+23:50:40 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:224:20 A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control
+23:50:40 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:228:20 A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control
+23:50:40 [vite-plugin-svelte] src/components/widget/DisplaySettings.svelte:232:20 A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control
+23:50:40 [200] / 21ms
+23:50:41 [200] /posts/guide/ 22ms
+23:50:42 [200] /about/ 22ms
+23:50:43 [200] /posts/guide/ 17ms
+23:50:43 [200] /posts/guide/ 22ms
+23:50:44 [200] /posts/guide/ 17ms
+23:50:45 [200] /posts/guide/ 21ms
+23:50:46 [200] / 17ms
+23:50:47 [200] /about/ 19ms
+23:50:50 [200] /posts/video/ 23ms
+23:50:51 [200] /posts/video/ 25ms
+23:50:53 [200] / 19ms
+23:50:53 [200] / 17ms
+23:50:56 [200] /about/ 17ms
+23:50:57 [200] / 18ms
+23:50:57 [200] / 17ms
+23:50:58 [200] /about/ 19ms
+23:51:20 [200] /posts/video/ 20ms
+23:58:28 [200] /posts/guide/ 21ms
