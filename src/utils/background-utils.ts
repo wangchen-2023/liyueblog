@@ -6,13 +6,25 @@ export type BackgroundOption = {
 	label?: string;
 };
 
+const BASE_URL = import.meta.env.BASE_URL || "/";
+
+function withBasePath(path: string): string {
+	if (!path.startsWith("/")) {
+		return path;
+	}
+	const normalizedBase = BASE_URL.endsWith("/")
+		? BASE_URL.slice(0, -1)
+		: BASE_URL;
+	return `${normalizedBase}${path}` || path;
+}
+
 export const BACKGROUND_OPTIONS: BackgroundOption[] = [
-	{ src: "/background/1.webp", type: "image" },
-	{ src: "/background/2.webp", type: "image" },
-	{ src: "/background/3.webp", type: "image" },
-	{ src: "/background/4.webp", type: "image" },
-	{ src: "/background/5.webp", type: "image" },
-	{ src: "/background/rain.mp4", type: "video" },
+	{ src: withBasePath("/background/1.webp"), type: "image" },
+	{ src: withBasePath("/background/2.webp"), type: "image" },
+	{ src: withBasePath("/background/3.webp"), type: "image" },
+	{ src: withBasePath("/background/4.webp"), type: "image" },
+	{ src: withBasePath("/background/5.webp"), type: "image" },
+	{ src: withBasePath("/background/rain.mp4"), type: "video" },
 ];
 
 export function normalizeBackgroundIndex(index: number): number {
