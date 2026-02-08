@@ -323,6 +323,44 @@ const bannerOffset =
 				});
 			};
 
+			const fallbackToImageBackground = () => {
+				const fallbackBackground = backgrounds.find(bg => bg.type === 'image');
+				if (!fallbackBackground) return;
+
+				const fallbackIndex = backgrounds.findIndex(
+					bg => bg.src === fallbackBackground.src && bg.type === fallbackBackground.type
+				);
+
+				selectedBackground = fallbackBackground;
+				selectedIndex = fallbackIndex;
+				window.__bgSelectionIndex = selectedIndex;
+				window.__bgSelection = selectedBackground;
+				if (fallbackIndex >= 0) {
+					localStorage.setItem('backgroundIndex', String(fallbackIndex));
+				}
+
+				const currentActiveVideo = document.getElementById('background-video');
+				const pendingVideo = document.getElementById('background-video-next');
+				if (pendingVideo) {
+					pendingVideo.remove();
+				}
+				backgroundVideoSwapToken += 1;
+				if (currentActiveVideo) {
+					removeVideoElement(currentActiveVideo);
+				}
+
+				root.classList.remove('background-video-live');
+				root.classList.add('background-video-hidden');
+				root.classList.remove('background-disabled');
+
+				if (!backgroundLayerInitialized) {
+					ensureInitialBackgroundLayer(fallbackBackground.src);
+				}
+				applyImageBackground(fallbackBackground.src, () => {
+					root.classList.add('background-active');
+				});
+			};
+
 			const createVideoElement = (src) => {
 				const video = document.createElement('video');
 				video.className = 'background-video background-video-prep';
@@ -405,6 +443,10 @@ const bannerOffset =
 								applyVideoBackground(src, retryCount + 1);
 							}
 						}, 1000);
+					} else {
+						if (nextToken === backgroundVideoSwapToken && selectedBackground && selectedBackground.type === 'video' && selectedBackground.src === src) {
+							fallbackToImageBackground();
+						}
 					}
 				};
 
@@ -422,6 +464,10 @@ const bannerOffset =
 								applyVideoBackground(src, retryCount + 1);
 							}
 						}, 1000);
+					} else {
+						if (nextToken === backgroundVideoSwapToken && selectedBackground && selectedBackground.type === 'video' && selectedBackground.src === src) {
+							fallbackToImageBackground();
+						}
 					}
 				};
 
