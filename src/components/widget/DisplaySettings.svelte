@@ -2,31 +2,31 @@
 import I18nKey from "@i18n/i18nKey";
 import { i18n } from "@i18n/translation";
 import Icon from "@iconify/svelte";
-import { onMount } from "svelte";
-import { fade, scale } from "svelte/transition";
-import { cubicOut } from "svelte/easing";
-import { 
-    getDefaultHue, 
-    getHue, 
-    setHue,
-    getBackgroundDisabled,
-    setBackgroundDisabled,
-    getRainbowMode,
-    setRainbowMode,
-    getRainMode,
-    setRainMode,
-    getRainConfig,
-    setRainConfig,
-    getBackgroundBlur,
-    setBackgroundBlur,
-    getStoredBackgroundIndex,
-    setBackgroundIndex,
-    type RainConfig
-} from "@utils/setting-utils";
 import {
-    BACKGROUND_OPTIONS,
-    normalizeBackgroundIndex
+	BACKGROUND_OPTIONS,
+	normalizeBackgroundIndex,
 } from "@utils/background-utils";
+import {
+	getBackgroundBlur,
+	getBackgroundDisabled,
+	getDefaultHue,
+	getHue,
+	getRainbowMode,
+	getRainConfig,
+	getRainMode,
+	getStoredBackgroundIndex,
+	type RainConfig,
+	setBackgroundBlur,
+	setBackgroundDisabled,
+	setBackgroundIndex,
+	setHue,
+	setRainbowMode,
+	setRainConfig,
+	setRainMode,
+} from "@utils/setting-utils";
+import { onMount } from "svelte";
+import { cubicOut } from "svelte/easing";
+import { fade, scale } from "svelte/transition";
 
 let hue = getHue();
 const defaultHue = getDefaultHue();
@@ -61,104 +61,120 @@ $: setRainbowMode(rainbowMode);
 $: setRainMode(rainMode);
 $: setBackgroundBlur(backgroundBlur);
 $: if (!rainMode && rainPanelOpen) {
-    rainPanelOpen = false;
+	rainPanelOpen = false;
+}
+$: if (typeof document !== "undefined") {
+	document.body.classList.toggle("rain-config-open", rainPanelOpen);
 }
 
 onMount(() => {
-    if (portalHost && typeof document !== "undefined") {
-        document.body.appendChild(portalHost);
-    }
+	if (portalHost && typeof document !== "undefined") {
+		document.body.appendChild(portalHost);
+	}
 
-    if (typeof window === "undefined") {
-        return () => {
-            if (portalHost?.parentNode) {
-                portalHost.parentNode.removeChild(portalHost);
-            }
-        };
-    }
+	if (typeof window === "undefined") {
+		return () => {
+			if (portalHost?.parentNode) {
+				portalHost.parentNode.removeChild(portalHost);
+			}
+		};
+	}
 
-    const handleBackgroundChange = (event: Event) => {
-        const detail = (event as CustomEvent<{ index?: number }>).detail;
-        if (!detail || typeof detail.index !== "number") return;
-        backgroundIndex = normalizeBackgroundIndex(detail.index);
-    };
+	const handleBackgroundChange = (event: Event) => {
+		const detail = (event as CustomEvent<{ index?: number }>).detail;
+		if (!detail || typeof detail.index !== "number") return;
+		backgroundIndex = normalizeBackgroundIndex(detail.index);
+	};
 
-    window.addEventListener("background-selection-change", handleBackgroundChange as EventListener);
-    return () => {
-        if (portalHost?.parentNode) {
-            portalHost.parentNode.removeChild(portalHost);
-        }
-        window.removeEventListener("background-selection-change", handleBackgroundChange as EventListener);
-    };
+	window.addEventListener(
+		"background-selection-change",
+		handleBackgroundChange as EventListener,
+	);
+	return () => {
+		if (typeof document !== "undefined") {
+			document.body.classList.remove("rain-config-open");
+		}
+		if (portalHost?.parentNode) {
+			portalHost.parentNode.removeChild(portalHost);
+		}
+		window.removeEventListener(
+			"background-selection-change",
+			handleBackgroundChange as EventListener,
+		);
+	};
 });
 
 function getInitialBackgroundIndex(): number {
-    const stored = getStoredBackgroundIndex();
-    if (typeof stored === "number") {
-        return stored;
-    }
-    if (typeof window !== "undefined") {
-        const win = window as Window & { __bgSelectionIndex?: number };
-        if (typeof win.__bgSelectionIndex === "number") {
-            return normalizeBackgroundIndex(win.__bgSelectionIndex);
-        }
-    }
-    return 0;
+	const stored = getStoredBackgroundIndex();
+	if (typeof stored === "number") {
+		return stored;
+	}
+	if (typeof window !== "undefined") {
+		const win = window as Window & { __bgSelectionIndex?: number };
+		if (typeof win.__bgSelectionIndex === "number") {
+			return normalizeBackgroundIndex(win.__bgSelectionIndex);
+		}
+	}
+	return 0;
 }
 
 function applyBackgroundIndex(nextIndex: number) {
-    if (!backgroundCount) return;
-    const normalized = normalizeBackgroundIndex(nextIndex);
-    backgroundIndex = normalized;
-    setBackgroundIndex(normalized);
+	if (!backgroundCount) return;
+	const normalized = normalizeBackgroundIndex(nextIndex);
+	backgroundIndex = normalized;
+	setBackgroundIndex(normalized);
 }
 
 function handleBackgroundWheel(event: WheelEvent) {
-    if (!backgroundCount) return;
-    const now = Date.now();
-    if (now - backgroundSwitchTimestamp < 140) return;
-    backgroundSwitchTimestamp = now;
-    if (event.deltaY === 0) return;
-    const direction = event.deltaY > 0 ? 1 : -1;
-    applyBackgroundIndex(backgroundIndex + direction);
+	if (!backgroundCount) return;
+	const now = Date.now();
+	if (now - backgroundSwitchTimestamp < 140) return;
+	backgroundSwitchTimestamp = now;
+	if (event.deltaY === 0) return;
+	const direction = event.deltaY > 0 ? 1 : -1;
+	applyBackgroundIndex(backgroundIndex + direction);
 }
 
 function handleWindowKeydown(event: KeyboardEvent) {
-    if (event.key !== "Escape") return;
-    if (!rainPanelOpen) return;
-    rainPanelOpen = false;
+	if (event.key !== "Escape") return;
+	if (!rainPanelOpen) return;
+	rainPanelOpen = false;
 }
 
 function updateRainConfig(key: keyof RainConfig, event: Event) {
-    const input = event.currentTarget as HTMLInputElement | null;
-    if (!input) return;
-    const value = input.valueAsNumber;
-    if (Number.isNaN(value)) return;
-    const nextValue = key === "count" ? Math.round(value) : value;
-    rainConfig = { ...rainConfig, [key]: nextValue };
-    setRainConfig(rainConfig);
-    updateRangeFill(input, nextValue);
+	const input = event.currentTarget as HTMLInputElement | null;
+	if (!input) return;
+	const value = input.valueAsNumber;
+	if (Number.isNaN(value)) return;
+	const nextValue = key === "count" ? Math.round(value) : value;
+	rainConfig = { ...rainConfig, [key]: nextValue };
+	setRainConfig(rainConfig);
+	updateRangeFill(input, nextValue);
 }
 
 function formatRainValue(value: number, decimals: number): string {
-    return Number(value.toFixed(decimals)).toString();
+	return Number(value.toFixed(decimals)).toString();
 }
 
-function updateRangeFill(input: HTMLInputElement | null, valueOverride?: number) {
-    if (!input) return;
-    const min = Number(input.min || "0");
-    const max = Number(input.max || "100");
-    const value = typeof valueOverride === "number" ? valueOverride : Number(input.value);
-    const percent = ((value - min) / (max - min)) * 100;
-    input.style.setProperty("--slider-value", `${percent}%`);
+function updateRangeFill(
+	input: HTMLInputElement | null,
+	valueOverride?: number,
+) {
+	if (!input) return;
+	const min = Number(input.min || "0");
+	const max = Number(input.max || "100");
+	const value =
+		typeof valueOverride === "number" ? valueOverride : Number(input.value);
+	const percent = ((value - min) / (max - min)) * 100;
+	input.style.setProperty("--slider-value", `${percent}%`);
 }
 
 // Update background blur slider fill effect
 let backgroundBlurSlider: HTMLInputElement;
 $: if (backgroundBlurSlider) {
-    // Calculate percentage value (0-20 range)
-    const percentage = (backgroundBlur / 20) * 100;
-    backgroundBlurSlider.style.setProperty('--slider-value', `${percentage}%`);
+	// Calculate percentage value (0-20 range)
+	const percentage = (backgroundBlur / 20) * 100;
+	backgroundBlurSlider.style.setProperty("--slider-value", `${percentage}%`);
 }
 
 $: if (countSlider) updateRangeFill(countSlider, rainConfig.count);
@@ -168,8 +184,10 @@ $: if (speedSlider) updateRangeFill(speedSlider, rainConfig.speed);
 $: if (angleSlider) updateRangeFill(angleSlider, rainConfig.angle);
 $: currentBackground = BACKGROUND_OPTIONS[backgroundIndex] ?? null;
 $: backgroundTypeLabel = currentBackground
-    ? (currentBackground.type === "video" ? "视频" : "图片")
-    : "--";
+	? currentBackground.type === "video"
+		? "视频"
+		: "图片"
+	: "--";
 </script>
 
 <svelte:window on:keydown={handleWindowKeydown} />
@@ -323,7 +341,7 @@ $: backgroundTypeLabel = currentBackground
                 <div class="rain-config-header">
                     <h3>雨幕参数调节</h3>
                     <button type="button" class="rain-config-close" aria-label="Close" on:click={() => rainPanelOpen = false}>
-                        x
+                        ×
                     </button>
                 </div>
                 <div class="control-group">
@@ -493,6 +511,10 @@ $: backgroundTypeLabel = currentBackground
           background-image linear-gradient(to right, var(--primary) var(--slider-value, 0%), #374151 var(--slider-value, 0%))
           color transparent
 
+    :global(body.rain-config-open)
+      overflow hidden
+      touch-action none
+
     .rain-config-overlay
       position fixed
       top 0
@@ -502,7 +524,8 @@ $: backgroundTypeLabel = currentBackground
       display flex
       align-items center
       justify-content center
-      background transparent
+      padding 12px
+      background rgba(2, 6, 23, 0.45)
       z-index 9999
 
     /* 移除导航栏绑定 */
@@ -512,19 +535,25 @@ $: backgroundTypeLabel = currentBackground
     */
 
     .rain-config-panel
+      --rain-accent var(--primary)
+      --rain-accent-strong var(--primary)
       width 420px
-      max-width 92vw
+      max-width min(92vw, 480px)
+      max-height min(86vh, 780px)
+      overflow-y auto
+      -webkit-overflow-scrolling touch
+      overscroll-behavior contain
+      box-sizing border-box
       padding 22px
-      background linear-gradient(180deg, rgba(16, 23, 28, 0.96) 0%, rgba(11, 16, 20, 0.98) 100%)
-      border 1px solid rgba(255, 255, 255, 0.08)
+      background var(--float-panel-bg)
+      border 2px solid var(--rain-accent)
       border-radius 18px
-      color #e5e7eb
+      color var(--btn-content)
       box-shadow 0 20px 60px rgba(0, 0, 0, 0.45)
-      backdrop-filter blur(14px)
       will-change transform, opacity
 
       .control-group
-        margin-bottom 16px
+        margin-bottom 18px
 
       label
         display flex
@@ -532,90 +561,130 @@ $: backgroundTypeLabel = currentBackground
         justify-content space-between
         font-size 15px
         margin-bottom 10px
-        color #e5e7eb
+        color var(--btn-content)
 
       input
         width 100%
         cursor pointer
-        accent-color #5ec8ff
+        accent-color var(--rain-accent)
+        touch-action pan-y
 
       .value-display
-        color #7dd3fc
+        color var(--rain-accent)
         font-weight 600
 
     .rain-config-header
       display flex
       align-items center
       justify-content space-between
-      margin-bottom 14px
+      position sticky
+      top 0
+      z-index 2
+      margin-bottom 12px
+      padding-bottom 12px
+      background transparent
 
       h3
         margin 0
         font-size 18px
         font-weight 700
-        color #f9fafb
+        color var(--btn-content)
 
     .rain-config-close
-      width 28px
-      height 28px
+      width 30px
+      height 30px
       border-radius 8px
       border 0
-      color #cbd5f5
-      background rgba(255, 255, 255, 0.06)
+      color var(--rain-accent)
+      background var(--btn-regular-bg)
       display inline-flex
       align-items center
       justify-content center
       transition background 0.15s ease-out, color 0.15s ease-out
 
       &:hover
-        background rgba(255, 255, 255, 0.14)
-        color #ffffff
+        background var(--btn-regular-bg-hover)
+        color var(--btn-content)
 
     .rain-config-panel input[type="range"]
       -webkit-appearance none
-      height 0.5rem
+      height 0.56rem
       border-radius 0.375rem
-      background-image linear-gradient(to right, #53bde9 var(--slider-value, 0%), #374151 var(--slider-value, 0%))
+      background-image linear-gradient(to right, var(--rain-accent) var(--slider-value, 0%), var(--btn-regular-bg) var(--slider-value, 0%))
       border none
       outline none
       box-shadow none
 
       &::-webkit-slider-runnable-track
-        height 0.5rem
+        height 0.56rem
         border-radius 0.375rem
-        background-image linear-gradient(to right, #53bde9 var(--slider-value, 0%), #374151 var(--slider-value, 0%))
+        background-image linear-gradient(to right, var(--rain-accent) var(--slider-value, 0%), var(--btn-regular-bg) var(--slider-value, 0%))
 
       &::-moz-range-track
-        height 0.5rem
+        height 0.56rem
         border-radius 0.375rem
-        background-image linear-gradient(to right, #53bde9 var(--slider-value, 0%), #374151 var(--slider-value, 0%))
+        background-image linear-gradient(to right, var(--rain-accent) var(--slider-value, 0%), var(--btn-regular-bg) var(--slider-value, 0%))
 
       &::-ms-track
-        height 0.5rem
+        height 0.56rem
         border-radius 0.375rem
-        background-image linear-gradient(to right, #53bde9 var(--slider-value, 0%), #374151 var(--slider-value, 0%))
+        background-image linear-gradient(to right, var(--rain-accent) var(--slider-value, 0%), var(--btn-regular-bg) var(--slider-value, 0%))
         color transparent
 
       &::-webkit-slider-thumb
         -webkit-appearance none
-        width 1rem
-        height 1rem
+        width 1.06rem
+        height 1.06rem
         border-radius 0.375rem
-        background #7dd3fc
+        background var(--rain-accent-strong)
         margin-top -0.25rem
-        box-shadow 0 0 0 2px rgba(0, 0, 0, 0.35)
+        box-shadow none
 
       &::-moz-range-thumb
-        width 1rem
-        height 1rem
+        width 1.06rem
+        height 1.06rem
         border-radius 0.375rem
-        background #7dd3fc
+        background var(--rain-accent-strong)
         border none
 
       &::-ms-thumb
-        width 1rem
-        height 1rem
+        width 1.06rem
+        height 1.06rem
         border-radius 0.375rem
-        background #7dd3fc
+        background var(--rain-accent-strong)
+
+    @media (max-width: 640px), (hover: none) and (pointer: coarse)
+      .rain-config-overlay
+        align-items flex-start
+        justify-content flex-end
+        padding 5.25rem 0.5rem calc(env(safe-area-inset-bottom, 0px) + 0.5rem)
+        background rgba(2, 6, 23, 0.2)
+        backdrop-filter none
+
+      .rain-config-panel
+        width min(78vw, 320px)
+        max-width 320px
+        max-height min(54vh, 460px)
+        border-radius 12px
+        padding 10px
+        box-shadow 0 10px 24px rgba(0, 0, 0, 0.4)
+
+        .control-group
+          margin-bottom 10px
+
+        label
+          font-size 12px
+          margin-bottom 6px
+
+        .value-display
+          min-width 2rem
+          text-align right
+
+      .rain-config-header
+        margin-bottom 6px
+        padding-bottom 6px
+
+        h3
+          font-size 14px
 
 </style>

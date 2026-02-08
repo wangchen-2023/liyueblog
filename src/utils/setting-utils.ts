@@ -4,16 +4,18 @@ import {
 	DEFAULT_THEME,
 	LIGHT_MODE,
 } from "@constants/constants.ts";
-import { expressiveCodeConfig } from "@/config";
-import type { LIGHT_DARK_MODE } from "@/types/config";
 import {
 	BACKGROUND_OPTIONS,
 	clampBackgroundIndex,
 	normalizeBackgroundIndex,
 } from "@utils/background-utils";
+import { expressiveCodeConfig } from "@/config";
+import type { LIGHT_DARK_MODE } from "@/types/config";
 
 function canUseStorage(): boolean {
-	return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+	return (
+		typeof window !== "undefined" && typeof window.localStorage !== "undefined"
+	);
 }
 
 export function getDefaultHue(): number {
@@ -69,12 +71,23 @@ export function applyThemeToDocument(theme: LIGHT_DARK_MODE) {
 	);
 }
 
+function applyThemeWithoutTransitions(theme: LIGHT_DARK_MODE): void {
+	const root = document.documentElement;
+	root.classList.add("theme-switching");
+	applyThemeToDocument(theme);
+	window.requestAnimationFrame(() => {
+		window.requestAnimationFrame(() => {
+			root.classList.remove("theme-switching");
+		});
+	});
+}
+
 export function setTheme(theme: LIGHT_DARK_MODE): void {
 	if (!canUseStorage()) {
 		return;
 	}
 	localStorage.setItem("theme", theme);
-	applyThemeToDocument(theme);
+	applyThemeWithoutTransitions(theme);
 }
 
 export function getStoredTheme(): LIGHT_DARK_MODE {
@@ -111,17 +124,45 @@ export function setBackgroundDisabled(disabled: boolean): void {
 			r.classList.remove("background-active");
 		}
 	}
+	if (typeof window !== "undefined") {
+		const videos =
+			document.querySelectorAll<HTMLVideoElement>(".background-video");
+		videos.forEach((video) => {
+			if (disabled) {
+				video.pause();
+			} else {
+				video.play().catch(() => {});
+			}
+		});
+		window.dispatchEvent(
+			new CustomEvent("background-disabled-change", {
+				detail: { disabled },
+			}),
+		);
+	}
 }
 
 // Rainbow mode settings
 let rainbowInterval: number | null = null;
 let currentHue = 0;
+let lastUpdateTime = 0;
+const UPDATE_INTERVAL = 30; // Target update interval in milliseconds
 
 export function getRainbowMode(): boolean {
 	if (!canUseStorage()) {
 		return false;
 	}
 	return localStorage.getItem("rainbowMode") === "true";
+}
+
+function updateRainbowHue(root: HTMLElement): void {
+	const now = performance.now();
+	if (now - lastUpdateTime >= UPDATE_INTERVAL) {
+		currentHue = (currentHue + 1) % 360;
+		root.style.setProperty("--hue", String(currentHue));
+		lastUpdateTime = now;
+	}
+	rainbowInterval = requestAnimationFrame(() => updateRainbowHue(root));
 }
 
 export function setRainbowMode(enabled: boolean): void {
@@ -131,26 +172,31 @@ export function setRainbowMode(enabled: boolean): void {
 	localStorage.setItem("rainbowMode", String(enabled));
 	const root = document.querySelector(":root") as HTMLElement;
 	if (!root) return;
-	
+
 	root.classList.toggle("rainbow-mode", enabled);
-	
-	// Clear any existing interval
+
+	// Clear any existing animation frame
 	if (rainbowInterval) {
-		clearInterval(rainbowInterval);
+		cancelAnimationFrame(rainbowInterval);
 		rainbowInterval = null;
 	}
-	
+
 	if (enabled) {
-		// Start rainbow effect with JavaScript
-		currentHue = parseInt(root.style.getPropertyValue("--hue")) || 0;
-		rainbowInterval = window.setInterval(() => {
-			currentHue = (currentHue + 1) % 360;
-			root.style.setProperty("--hue", String(currentHue));
-		}, 30); // Update every 30ms for smooth effect
+		// Start rainbow effect with JavaScript using requestAnimationFrame
+		currentHue = Number.parseInt(root.style.getPropertyValue("--hue"), 10) || 0;
+		lastUpdateTime = performance.now();
+		updateRainbowHue(root);
 	} else {
 		// Restore the original hue from localStorage
 		const hue = getHue();
 		root.style.setProperty("--hue", String(hue));
+	}
+
+	// Dispatch event for rainbow mode change
+	if (typeof window !== "undefined") {
+		window.dispatchEvent(
+			new CustomEvent("rainbow-mode-change", { detail: enabled }),
+		);
 	}
 }
 

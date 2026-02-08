@@ -12,6 +12,7 @@ let result: SearchResult[] = [];
 let isSearching = false;
 let pagefindLoaded = false;
 let initialized = false;
+const cjkRegex = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u;
 
 const fakeResult: SearchResult[] = [
 	{
@@ -47,6 +48,13 @@ const setPanelVisibility = (show: boolean, isDesktop: boolean): void => {
 	}
 };
 
+const getCjkFallbackKeyword = (keyword: string): string | null => {
+	const normalized = keyword.trim().replace(/\s+/g, " ");
+	if (!normalized || normalized.includes(" ")) return null;
+	if (!cjkRegex.test(normalized)) return null;
+	return Array.from(normalized).join(" ");
+};
+
 const search = async (keyword: string, isDesktop: boolean): Promise<void> => {
 	if (!keyword) {
 		setPanelVisibility(false, isDesktop);
@@ -64,10 +72,22 @@ const search = async (keyword: string, isDesktop: boolean): Promise<void> => {
 		let searchResults: SearchResult[] = [];
 
 		if (import.meta.env.PROD && pagefindLoaded && window.pagefind) {
-			const response = await window.pagefind.search(keyword);
+			const normalizedKeyword = keyword.trim();
+			const response = await window.pagefind.search(normalizedKeyword);
 			searchResults = await Promise.all(
 				response.results.map((item) => item.data()),
 			);
+
+			if (searchResults.length === 0) {
+				const fallbackKeyword = getCjkFallbackKeyword(normalizedKeyword);
+				if (fallbackKeyword) {
+					const fallbackResponse =
+						await window.pagefind.search(fallbackKeyword);
+					searchResults = await Promise.all(
+						fallbackResponse.results.map((item) => item.data()),
+					);
+				}
+			}
 		} else if (import.meta.env.DEV) {
 			searchResults = fakeResult;
 		} else {

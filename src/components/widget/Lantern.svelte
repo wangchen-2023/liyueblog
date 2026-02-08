@@ -1,46 +1,49 @@
 <script lang="ts">
-	import { onMount } from "svelte";
-	import { fade } from "svelte/transition";
-	import { cubicOut } from "svelte/easing";
+import { onMount } from "svelte";
+import { cubicOut } from "svelte/easing";
+import { fade } from "svelte/transition";
 
-	let isEnabled: boolean = $state(true);
-	
-	// 检查localStorage是否可用
-	function isLocalStorageAvailable() {
-		try {
-			return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
-		} catch {
-			return false;
+let isEnabled = true;
+
+// 检查localStorage是否可用
+function isLocalStorageAvailable() {
+	try {
+		return (
+			typeof window !== "undefined" &&
+			typeof window.localStorage !== "undefined"
+		);
+	} catch {
+		return false;
+	}
+}
+
+// 从localStorage加载状态
+function loadLanternState() {
+	if (isLocalStorageAvailable()) {
+		const savedState = localStorage.getItem("lanternEnabled");
+		if (savedState !== null) {
+			isEnabled = savedState === "true";
 		}
 	}
-	
-	// 从localStorage加载状态
-	function loadLanternState() {
-		if (isLocalStorageAvailable()) {
-			const savedState = localStorage.getItem('lanternEnabled');
-			if (savedState !== null) {
-				isEnabled = savedState === 'true';
-			}
-		}
+}
+
+// 保存状态到localStorage
+function saveLanternState() {
+	if (isLocalStorageAvailable()) {
+		localStorage.setItem("lanternEnabled", isEnabled.toString());
 	}
-	
-	// 保存状态到localStorage
-	function saveLanternState() {
-		if (isLocalStorageAvailable()) {
-			localStorage.setItem('lanternEnabled', isEnabled.toString());
-		}
-	}
-	
-	// 切换灯笼状态
-	function toggleLantern() {
-		isEnabled = !isEnabled;
-		saveLanternState();
-	}
-	
-	// 组件挂载时加载状态
-	onMount(() => {
-		loadLanternState();
-	});
+}
+
+// 切换灯笼状态
+function toggleLantern() {
+	isEnabled = !isEnabled;
+	saveLanternState();
+}
+
+// 组件挂载时加载状态
+onMount(() => {
+	loadLanternState();
+});
 </script>
 
 {#if isEnabled}

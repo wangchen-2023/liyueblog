@@ -1,0 +1,16 @@
+
+> liyueblog@1.0.0 preview C:\Users\liyueovo\Desktop\liyueblog
+> astro preview "--host" "0.0.0.0" "--port" "4321"
+
+Port 4321 is in use, trying another one...
+Port 4322 is in use, trying another one...
+
+ astro  v5.13.10 ready in 25 ms
+
+┃ Local    http://localhost:4323/
+┃ Network  http://192.168.56.1:4323/
+           http://192.168.137.1:4323/
+           http://192.168.179.1:4323/
+           http://192.168.197.1:4323/
+           http://192.168.31.212:4323/
+
