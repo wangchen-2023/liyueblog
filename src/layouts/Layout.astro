@@ -173,16 +173,25 @@ const bannerOffset =
 				return ((index % backgrounds.length) + backgrounds.length) % backgrounds.length;
 			};
 
-			const findImageFallbackIndex = (fromIndex = 0) => {
+			const findImageFallbackIndex = (fromIndex = 0, step = 1) => {
 				if (!backgrounds.length) return -1;
+				const direction = step < 0 ? -1 : 1;
 				for (let offset = 0; offset < backgrounds.length; offset += 1) {
-					const idx = normalizeIndex(fromIndex + offset);
+					const idx = normalizeIndex(fromIndex + (direction * offset));
 					const candidate = backgrounds[idx];
 					if (candidate && candidate.type === 'image') {
 						return idx;
 					}
 				}
 				return -1;
+			};
+
+			const getSelectionStep = (fromIndex, toIndex) => {
+				if (!backgrounds.length) return 1;
+				if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return 1;
+				const forwardDistance = normalizeIndex(toIndex - fromIndex);
+				const backwardDistance = normalizeIndex(fromIndex - toIndex);
+				return forwardDistance <= backwardDistance ? 1 : -1;
 			};
 
 			const storedBackgroundIndexRaw = localStorage.getItem('backgroundIndex');
@@ -246,6 +255,29 @@ const bannerOffset =
 			let backgroundImageSwapToken = 0;
 			let backgroundVideoSwapToken = 0;
 			const failedVideoSources = new Set();
+			let lastSelectionStep = 1;
+			let backgroundTitleObserver = null;
+
+			const stripBackgroundTitleTooltips = () => {
+				const titledElements = document.querySelectorAll('[title]');
+				titledElements.forEach((el) => {
+					const value = el.getAttribute('title');
+					if (typeof value === 'string' && value.includes('/background/')) {
+						el.removeAttribute('title');
+					}
+				});
+			};
+
+			// Preserve current layer state across Swup page visits so transitions stay smooth.
+			const hasExistingLayer =
+				root.classList.contains('background-layer-a') ||
+				root.classList.contains('background-layer-b');
+			if (hasExistingLayer) {
+				backgroundLayerInitialized = true;
+			}
+			if (selectedBackground && selectedBackground.type === 'image') {
+				activeImageSrc = selectedBackground.src;
+			}
 
 			const ensureInitialBackgroundLayer = (src) => {
 				if (!src) return;
@@ -336,8 +368,11 @@ const bannerOffset =
 				});
 			};
 
-			const fallbackToImageBackground = (fromIndex = selectedIndex >= 0 ? selectedIndex : 0) => {
-				const fallbackIndex = findImageFallbackIndex(fromIndex);
+			const fallbackToImageBackground = (
+				fromIndex = selectedIndex >= 0 ? selectedIndex : 0,
+				step = lastSelectionStep
+			) => {
+				const fallbackIndex = findImageFallbackIndex(fromIndex, step);
 				if (fallbackIndex < 0 || !backgrounds[fallbackIndex]) return;
 				const fallbackBackground = backgrounds[fallbackIndex];
 
@@ -440,7 +475,7 @@ const bannerOffset =
 					} else {
 						if (nextToken === backgroundVideoSwapToken && selectedBackground && selectedBackground.type === 'video' && selectedBackground.src === src) {
 							failedVideoSources.add(src);
-							fallbackToImageBackground(selectedIndex + 1);
+							fallbackToImageBackground(selectedIndex + lastSelectionStep, lastSelectionStep);
 						}
 					}
 				};
@@ -462,7 +497,7 @@ const bannerOffset =
 					} else {
 						if (nextToken === backgroundVideoSwapToken && selectedBackground && selectedBackground.type === 'video' && selectedBackground.src === src) {
 							failedVideoSources.add(src);
-							fallbackToImageBackground(selectedIndex + 1);
+							fallbackToImageBackground(selectedIndex + lastSelectionStep, lastSelectionStep);
 						}
 					}
 				};
@@ -501,7 +536,7 @@ const bannerOffset =
 					selectedBackground.type === 'video' &&
 					failedVideoSources.has(selectedBackground.src)
 				) {
-					fallbackToImageBackground(selectedIndex + 1);
+					fallbackToImageBackground(selectedIndex + lastSelectionStep, lastSelectionStep);
 					return;
 				}
 
@@ -549,11 +584,6 @@ const bannerOffset =
 						root.classList.add('background-video-hidden');
 					}
 					
-					// Ensure background layer is initialized for image backgrounds
-					if (!backgroundLayerInitialized) {
-						ensureInitialBackgroundLayer(selectedBackground.src);
-					}
-					
 					// Apply image background
 					applyImageBackground(selectedBackground.src, () => {
 						// Remove video element after image is loaded
@@ -575,10 +605,12 @@ const bannerOffset =
 				if (!backgrounds.length) return;
 				let normalized = normalizeIndex(index);
 				if (normalized < 0 || !backgrounds[normalized]) return;
+				const direction = getSelectionStep(selectedIndex, normalized);
+				lastSelectionStep = direction;
 
 				const candidate = backgrounds[normalized];
 				if (candidate.type === 'video' && failedVideoSources.has(candidate.src)) {
-					const nextImageIndex = findImageFallbackIndex(normalized + 1);
+					const nextImageIndex = findImageFallbackIndex(normalized + direction, direction);
 					if (nextImageIndex >= 0 && backgrounds[nextImageIndex]) {
 						normalized = nextImageIndex;
 						localStorage.setItem('backgroundIndex', String(nextImageIndex));
@@ -592,22 +624,78 @@ const bannerOffset =
 				setupBackground();
 			};
 
-			window.addEventListener('background-selection-change', (event) => {
+			const onBackgroundSelectionChange = (event) => {
 				const detail = event?.detail;
 				if (!detail || typeof detail.index !== 'number') return;
 				if (detail.internal === true) return;
 				applyBackgroundSelection(detail.index);
-			});
+				stripBackgroundTitleTooltips();
+			};
 
-			window.addEventListener('background-disabled-change', () => {
+			const onBackgroundDisabledChange = () => {
 				setupBackground();
-			});
+				stripBackgroundTitleTooltips();
+			};
+
+			if (typeof window.__backgroundSelectionListener === 'function') {
+				window.removeEventListener(
+					'background-selection-change',
+					window.__backgroundSelectionListener
+				);
+			}
+			if (typeof window.__backgroundDisabledListener === 'function') {
+				window.removeEventListener(
+					'background-disabled-change',
+					window.__backgroundDisabledListener
+				);
+			}
+
+			window.__backgroundSelectionListener = onBackgroundSelectionChange;
+			window.__backgroundDisabledListener = onBackgroundDisabledChange;
+			window.addEventListener(
+				'background-selection-change',
+				onBackgroundSelectionChange
+			);
+			window.addEventListener(
+				'background-disabled-change',
+				onBackgroundDisabledChange
+			);
 			
 			// Check if DOM is loaded before setting up background
 			if (document.readyState === 'loading') {
-				document.addEventListener('DOMContentLoaded', setupBackground);
+				document.addEventListener('DOMContentLoaded', () => {
+					setupBackground();
+					stripBackgroundTitleTooltips();
+					if (document.body) {
+						if (window.__backgroundTitleObserver) {
+							window.__backgroundTitleObserver.disconnect();
+						}
+						backgroundTitleObserver = new MutationObserver(() => stripBackgroundTitleTooltips());
+						window.__backgroundTitleObserver = backgroundTitleObserver;
+						backgroundTitleObserver.observe(document.body, {
+							subtree: true,
+							childList: true,
+							attributes: true,
+							attributeFilter: ['title'],
+						});
+					}
+				});
 			} else {
 				setupBackground();
+				stripBackgroundTitleTooltips();
+				if (document.body) {
+					if (window.__backgroundTitleObserver) {
+						window.__backgroundTitleObserver.disconnect();
+					}
+					backgroundTitleObserver = new MutationObserver(() => stripBackgroundTitleTooltips());
+					window.__backgroundTitleObserver = backgroundTitleObserver;
+					backgroundTitleObserver.observe(document.body, {
+						subtree: true,
+						childList: true,
+						attributes: true,
+						attributeFilter: ['title'],
+					});
+				}
 			}
 
 			// calculate the --banner-height-extend, which needs to be a multiple of 4 to avoid blurry text

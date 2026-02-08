@@ -37,6 +37,7 @@ let rainConfig: RainConfig = getRainConfig();
 let backgroundBlur = getBackgroundBlur();
 let rainPanelOpen = false;
 let portalHost: HTMLDivElement | null = null;
+let displaySettingRoot: HTMLDivElement | null = null;
 let countSlider: HTMLInputElement | null = null;
 let widthSlider: HTMLInputElement | null = null;
 let lengthSlider: HTMLInputElement | null = null;
@@ -68,6 +69,23 @@ $: if (typeof document !== "undefined") {
 }
 
 onMount(() => {
+	const removeNativeTitleTooltips = () => {
+		if (!displaySettingRoot) return;
+		const titledElements =
+			displaySettingRoot.querySelectorAll<HTMLElement>("[title]");
+		titledElements.forEach((el) => el.removeAttribute("title"));
+	};
+
+	removeNativeTitleTooltips();
+	const titleObserver = displaySettingRoot
+		? new MutationObserver(() => removeNativeTitleTooltips())
+		: null;
+	titleObserver?.observe(displaySettingRoot, {
+		subtree: true,
+		attributes: true,
+		attributeFilter: ["title"],
+	});
+
 	if (portalHost && typeof document !== "undefined") {
 		document.body.appendChild(portalHost);
 	}
@@ -97,6 +115,7 @@ onMount(() => {
 		if (portalHost?.parentNode) {
 			portalHost.parentNode.removeChild(portalHost);
 		}
+		titleObserver?.disconnect();
 		window.removeEventListener(
 			"background-selection-change",
 			handleBackgroundChange as EventListener,
@@ -192,7 +211,7 @@ $: backgroundTypeLabel = currentBackground
 
 <svelte:window on:keydown={handleWindowKeydown} />
 
-<div id="display-setting" class="float-panel float-panel-closed absolute transition-all w-80 right-4 px-4 py-4">
+<div id="display-setting" bind:this={displaySettingRoot} class="float-panel float-panel-closed absolute transition-all w-80 right-4 px-4 py-4">
     <!-- Theme Color -->
     <div class="mb-4" class:opacity-50={rainbowMode} class:pointer-events-none={rainbowMode}>
         <div class="flex flex-row gap-2 mb-3 items-center justify-between">
@@ -318,8 +337,7 @@ $: backgroundTypeLabel = currentBackground
                 <Icon icon="fa6-solid:chevron-left" class="text-[0.75rem]"></Icon>
             </button>
             <div class="flex-1 h-8 rounded-md bg-[var(--btn-regular-bg)] text-[var(--btn-content)] flex items-center justify-center gap-2 text-sm font-bold"
-                 class:opacity-50={!backgroundCount}
-                 title={currentBackground?.src || ""}>
+                 class:opacity-50={!backgroundCount}>
                 <Icon icon={currentBackground?.type === "video" ? "fa6-solid:video" : "fa6-solid:image"} class="text-[0.75rem]"></Icon>
                 <span>{backgroundTypeLabel}</span>
             </div>
