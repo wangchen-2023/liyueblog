@@ -173,6 +173,18 @@ const bannerOffset =
 				return ((index % backgrounds.length) + backgrounds.length) % backgrounds.length;
 			};
 
+			const findImageFallbackIndex = (fromIndex = 0) => {
+				if (!backgrounds.length) return -1;
+				for (let offset = 0; offset < backgrounds.length; offset += 1) {
+					const idx = normalizeIndex(fromIndex + offset);
+					const candidate = backgrounds[idx];
+					if (candidate && candidate.type === 'image') {
+						return idx;
+					}
+				}
+				return -1;
+			};
+
 			const storedBackgroundIndexRaw = localStorage.getItem('backgroundIndex');
 			let storedBackgroundIndex = null;
 			if (storedBackgroundIndexRaw !== null) {
@@ -233,6 +245,7 @@ const bannerOffset =
 			let activeImageSrc = null;
 			let backgroundImageSwapToken = 0;
 			let backgroundVideoSwapToken = 0;
+			const failedVideoSources = new Set();
 
 			const ensureInitialBackgroundLayer = (src) => {
 				if (!src) return;
@@ -323,42 +336,23 @@ const bannerOffset =
 				});
 			};
 
-			const fallbackToImageBackground = () => {
-				const fallbackBackground = backgrounds.find(bg => bg.type === 'image');
-				if (!fallbackBackground) return;
-
-				const fallbackIndex = backgrounds.findIndex(
-					bg => bg.src === fallbackBackground.src && bg.type === fallbackBackground.type
-				);
+			const fallbackToImageBackground = (fromIndex = selectedIndex >= 0 ? selectedIndex : 0) => {
+				const fallbackIndex = findImageFallbackIndex(fromIndex);
+				if (fallbackIndex < 0 || !backgrounds[fallbackIndex]) return;
+				const fallbackBackground = backgrounds[fallbackIndex];
 
 				selectedBackground = fallbackBackground;
 				selectedIndex = fallbackIndex;
 				window.__bgSelectionIndex = selectedIndex;
 				window.__bgSelection = selectedBackground;
-				if (fallbackIndex >= 0) {
-					localStorage.setItem('backgroundIndex', String(fallbackIndex));
-				}
-
-				const currentActiveVideo = document.getElementById('background-video');
-				const pendingVideo = document.getElementById('background-video-next');
-				if (pendingVideo) {
-					pendingVideo.remove();
-				}
-				backgroundVideoSwapToken += 1;
-				if (currentActiveVideo) {
-					removeVideoElement(currentActiveVideo);
-				}
-
-				root.classList.remove('background-video-live');
-				root.classList.add('background-video-hidden');
+				localStorage.setItem('backgroundIndex', String(fallbackIndex));
 				root.classList.remove('background-disabled');
-
-				if (!backgroundLayerInitialized) {
-					ensureInitialBackgroundLayer(fallbackBackground.src);
-				}
-				applyImageBackground(fallbackBackground.src, () => {
-					root.classList.add('background-active');
-				});
+				setupBackground();
+				window.dispatchEvent(
+					new CustomEvent('background-selection-change', {
+						detail: { index: fallbackIndex, internal: true },
+					})
+				);
 			};
 
 			const createVideoElement = (src) => {
@@ -445,7 +439,8 @@ const bannerOffset =
 						}, 1000);
 					} else {
 						if (nextToken === backgroundVideoSwapToken && selectedBackground && selectedBackground.type === 'video' && selectedBackground.src === src) {
-							fallbackToImageBackground();
+							failedVideoSources.add(src);
+							fallbackToImageBackground(selectedIndex + 1);
 						}
 					}
 				};
@@ -466,7 +461,8 @@ const bannerOffset =
 						}, 1000);
 					} else {
 						if (nextToken === backgroundVideoSwapToken && selectedBackground && selectedBackground.type === 'video' && selectedBackground.src === src) {
-							fallbackToImageBackground();
+							failedVideoSources.add(src);
+							fallbackToImageBackground(selectedIndex + 1);
 						}
 					}
 				};
@@ -498,6 +494,14 @@ const bannerOffset =
 				}
 
 				if (!selectedBackground) {
+					return;
+				}
+
+				if (
+					selectedBackground.type === 'video' &&
+					failedVideoSources.has(selectedBackground.src)
+				) {
+					fallbackToImageBackground(selectedIndex + 1);
 					return;
 				}
 
@@ -569,8 +573,18 @@ const bannerOffset =
 
 			const applyBackgroundSelection = (index) => {
 				if (!backgrounds.length) return;
-				const normalized = normalizeIndex(index);
+				let normalized = normalizeIndex(index);
 				if (normalized < 0 || !backgrounds[normalized]) return;
+
+				const candidate = backgrounds[normalized];
+				if (candidate.type === 'video' && failedVideoSources.has(candidate.src)) {
+					const nextImageIndex = findImageFallbackIndex(normalized + 1);
+					if (nextImageIndex >= 0 && backgrounds[nextImageIndex]) {
+						normalized = nextImageIndex;
+						localStorage.setItem('backgroundIndex', String(nextImageIndex));
+					}
+				}
+
 				selectedIndex = normalized;
 				selectedBackground = backgrounds[normalized];
 				window.__bgSelectionIndex = selectedIndex;
@@ -581,6 +595,7 @@ const bannerOffset =
 			window.addEventListener('background-selection-change', (event) => {
 				const detail = event?.detail;
 				if (!detail || typeof detail.index !== 'number') return;
+				if (detail.internal === true) return;
 				applyBackgroundSelection(detail.index);
 			});
 
