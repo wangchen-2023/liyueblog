@@ -1,9 +1,16 @@
 <script lang="ts">
-import { onMount } from "svelte";
+import { onDestroy, onMount } from "svelte";
 import { cubicOut } from "svelte/easing";
 import { fade } from "svelte/transition";
 
 let isEnabled = true;
+let isDragging = false;
+let startX = 0;
+let startY = 0;
+let offsetX = 0;
+let offsetY = 0;
+let showDragAnimation = false;
+let dragAnimationOffset = { x: 0, y: 0 };
 
 // 检查localStorage是否可用
 function isLocalStorageAvailable() {
@@ -15,6 +22,11 @@ function isLocalStorageAvailable() {
 	} catch {
 		return false;
 	}
+}
+
+// 检查是否是移动设备
+function isMobileDevice() {
+	return typeof window !== "undefined" && window.innerWidth <= 768;
 }
 
 // 从localStorage加载状态
@@ -40,9 +52,137 @@ function toggleLantern() {
 	saveLanternState();
 }
 
+// 开始拖动
+function startDrag(event: MouseEvent | TouchEvent) {
+	isDragging = true;
+
+	// 隐藏拖动动画
+	showDragAnimation = false;
+
+	// 计算初始位置
+	if (event instanceof MouseEvent) {
+		startX = event.clientX - offsetX;
+		startY = event.clientY - offsetY;
+		// 阻止默认行为，提高拖动灵敏度
+		event.preventDefault();
+	} else {
+		startX = event.touches[0].clientX - offsetX;
+		startY = event.touches[0].clientY - offsetY;
+		// 阻止默认行为，提高拖动灵敏度
+		event.preventDefault();
+	}
+}
+
+// 拖动中
+function drag(event: MouseEvent | TouchEvent) {
+	if (!isDragging) return;
+
+	// 阻止默认行为，提高拖动灵敏度
+	if (event instanceof MouseEvent) {
+		event.preventDefault();
+		offsetX = event.clientX - startX;
+		offsetY = event.clientY - startY;
+	} else {
+		event.preventDefault();
+		offsetX = event.touches[0].clientX - startX;
+		offsetY = event.touches[0].clientY - startY;
+	}
+}
+
+// 结束拖动
+function endDrag() {
+	isDragging = false;
+}
+
 // 组件挂载时加载状态
 onMount(() => {
 	loadLanternState();
+
+	// 检查是否是第一次打开网页
+	function isFirstVisit() {
+		// 暂时总是返回true，方便测试动画
+		return true;
+		/*
+		if (!isLocalStorageAvailable()) return true;
+		const hasVisited = localStorage.getItem("lanternAnimationShown");
+		return !hasVisited;
+		*/
+	}
+
+	// 标记动画已显示
+	function markAnimationShown() {
+		// 暂时注释掉，方便测试动画
+		/*
+		if (isLocalStorageAvailable()) {
+			localStorage.setItem("lanternAnimationShown", "true");
+		}
+		*/
+	}
+
+	// 在所有设备上显示拖动动画（方便测试）
+	if (isFirstVisit()) {
+		showDragAnimation = true;
+
+		// 开始拖动动画 - 只左右移动，先快后慢
+		const directions = [
+			{ x: 10, y: 0 },
+			{ x: -10, y: 0 },
+		];
+		let currentDirection = 0;
+		let animationCount = 0;
+		const maxAnimations = 6; // 动画次数
+		let currentSpeed = 100; // 初始动画速度（毫秒）
+		const speedIncrease = 25; // 每次动画增加的速度（毫秒）
+
+		// 使用递归函数实现可变速度的动画
+		function animate() {
+			if (showDragAnimation && animationCount < maxAnimations) {
+				dragAnimationOffset = directions[currentDirection];
+				currentDirection = (currentDirection + 1) % directions.length;
+				animationCount++;
+
+				// 增加动画间隔，实现先快后慢的效果
+				currentSpeed += speedIncrease;
+
+				// 安排下一次动画
+				setTimeout(animate, currentSpeed);
+			} else {
+				// 停止动画，恢复原位置
+				dragAnimationOffset = { x: 0, y: 0 };
+				showDragAnimation = false;
+				markAnimationShown();
+			}
+		}
+
+		// 开始动画
+		animate();
+
+		// 添加全局鼠标事件监听
+		window.addEventListener("mousemove", drag);
+		window.addEventListener("mouseup", endDrag);
+		window.addEventListener("mouseleave", endDrag);
+		window.addEventListener("touchmove", drag);
+		window.addEventListener("touchend", endDrag);
+
+		return () => {
+			clearInterval(animationInterval);
+			window.removeEventListener("mousemove", drag);
+			window.removeEventListener("mouseup", endDrag);
+			window.removeEventListener("mouseleave", endDrag);
+			window.removeEventListener("touchmove", drag);
+			window.removeEventListener("touchend", endDrag);
+		};
+	}
+	// 在桌面设备上添加全局鼠标事件监听
+	window.addEventListener("mousemove", drag);
+	window.addEventListener("mouseup", endDrag);
+	window.addEventListener("mouseleave", endDrag);
+
+	return () => {
+		window.removeEventListener("mousemove", drag);
+		window.removeEventListener("mouseup", endDrag);
+		window.removeEventListener("mouseleave", endDrag);
+	};
 });
 </script>
 
@@ -99,13 +239,20 @@ onMount(() => {
 
 <!-- 控制开关 -->
 <div class="lantern-control">
-	<button 
-		class="lantern-toggle" 
-		onclick={toggleLantern}
-		aria-label={isEnabled ? '关闭灯笼' : '打开灯笼'}
+	<div 
+		class="lantern-toggle-container"
+		onmousedown={startDrag}
+		touchstart={startDrag}
+		style={`transform: translate(${offsetX + (showDragAnimation ? dragAnimationOffset.x : 0)}px, ${offsetY + (showDragAnimation ? dragAnimationOffset.y : 0)}px); cursor: ${isDragging ? 'grabbing' : 'grab'}`}
 	>
-		{isEnabled ? '🧨 关闭灯笼' : '🏮 打开灯笼'}
-	</button>
+		<button 
+			class="lantern-toggle" 
+			onclick={toggleLantern}
+			aria-label={isEnabled ? '关闭灯笼' : '打开灯笼'}
+		>
+			{isEnabled ? '🧨 关闭灯笼' : '🏮 打开灯笼'}
+		</button>
+	</div>
 </div>
 
 <style lang="css">
@@ -230,10 +377,15 @@ onMount(() => {
 	/* 控制开关样式 */
 	.lantern-control {
 		position: fixed;
-		top: 10px;
+		bottom: 10px;
 		right: 10px;
 		z-index: 10000;
 		pointer-events: auto;
+	}
+	
+	.lantern-toggle-container {
+		position: relative;
+		transition: transform 0.1s ease-out;
 	}
 	
 	.lantern-toggle {
@@ -247,6 +399,7 @@ onMount(() => {
 		cursor: pointer;
 		transition: all 0.3s ease;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+		user-select: none;
 	}
 	
 	.lantern-toggle:hover {
@@ -257,6 +410,11 @@ onMount(() => {
 	
 	.lantern-toggle:active {
 		transform: translateY(0);
+	}
+	
+	/* 拖动动画效果 */
+	.lantern-toggle-container {
+		transition: transform 0.1s ease-out;
 	}
 
 	/* Mobile only adjustments */
@@ -319,14 +477,14 @@ onMount(() => {
 		}
 
 		.lantern-control {
-			top: 6px;
+			bottom: 6px;
 			right: 6px;
 		}
 
 		.lantern-toggle {
-			padding: 6px 12px;
-			font-size: 12px;
-			border-radius: 16px;
+			padding: 10px 18px;
+			font-size: 14px;
+			border-radius: 20px;
 		}
 	}
 </style>
