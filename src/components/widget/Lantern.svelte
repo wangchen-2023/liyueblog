@@ -11,6 +11,11 @@ let offsetX = 0;
 let offsetY = 0;
 let showDragAnimation = false;
 let dragAnimationOffset = { x: 0, y: 0 };
+let currentDeviceKey = "";
+
+// 触摸事件相关变量 - 用于检测双击
+let lastTapTime = 0;
+const DOUBLE_TAP_THRESHOLD = 300;
 
 // 检查localStorage是否可用
 function isLocalStorageAvailable() {
@@ -27,6 +32,13 @@ function isLocalStorageAvailable() {
 // 检查是否是移动设备
 function isMobileDevice() {
 	return typeof window !== "undefined" && window.innerWidth <= 768;
+}
+
+// 获取设备类型的存储键
+function getDeviceStorageKey() {
+	const deviceKey = isMobileDevice() ? "mobile" : "desktop";
+	currentDeviceKey = deviceKey;
+	return deviceKey;
 }
 
 // 从localStorage加载状态
@@ -46,6 +58,36 @@ function saveLanternState() {
 	}
 }
 
+// 从localStorage加载位置
+function loadLanternPosition() {
+	if (isLocalStorageAvailable()) {
+		const deviceKey = getDeviceStorageKey();
+		const savedPosition = localStorage.getItem(`lanternPosition_${deviceKey}`);
+		if (savedPosition !== null) {
+			try {
+				const position = JSON.parse(savedPosition);
+				offsetX = position.x || 0;
+				offsetY = position.y || 0;
+			} catch {
+				// 解析失败，使用默认值
+				offsetX = 0;
+				offsetY = 0;
+			}
+		}
+	}
+}
+
+// 保存位置到localStorage
+function saveLanternPosition() {
+	if (isLocalStorageAvailable()) {
+		const deviceKey = getDeviceStorageKey();
+		localStorage.setItem(
+			`lanternPosition_${deviceKey}`,
+			JSON.stringify({ x: offsetX, y: offsetY }),
+		);
+	}
+}
+
 // 切换灯笼状态
 function toggleLantern() {
 	isEnabled = !isEnabled;
@@ -54,6 +96,24 @@ function toggleLantern() {
 
 // 开始拖动
 function startDrag(event: MouseEvent | TouchEvent) {
+	// 检测双击事件
+	if (event instanceof TouchEvent) {
+		const currentTime = Date.now();
+		const tapLength = currentTime - lastTapTime;
+
+		// 检查是否是双击（时间间隔小于阈值）
+		if (tapLength < DOUBLE_TAP_THRESHOLD && tapLength > 0) {
+			// 触发双击处理
+			handleDoubleClick();
+			// 阻止默认行为，防止拖动
+			event.preventDefault();
+			return;
+		}
+
+		// 记录本次点击时间
+		lastTapTime = currentTime;
+	}
+
 	isDragging = true;
 
 	// 隐藏拖动动画
@@ -68,7 +128,7 @@ function startDrag(event: MouseEvent | TouchEvent) {
 	} else {
 		startX = event.touches[0].clientX - offsetX;
 		startY = event.touches[0].clientY - offsetY;
-		// 阻止默认行为，提高拖动灵敏度
+		// 阻止默认行为，防止页面滚动
 		event.preventDefault();
 	}
 }
@@ -77,7 +137,7 @@ function startDrag(event: MouseEvent | TouchEvent) {
 function drag(event: MouseEvent | TouchEvent) {
 	if (!isDragging) return;
 
-	// 阻止默认行为，提高拖动灵敏度
+	// 阻止默认行为，防止页面滚动
 	if (event instanceof MouseEvent) {
 		event.preventDefault();
 		offsetX = event.clientX - startX;
@@ -89,14 +149,66 @@ function drag(event: MouseEvent | TouchEvent) {
 	}
 }
 
+// 添加触摸事件处理，防止页面滚动
+function preventScroll(event: TouchEvent) {
+	if (isDragging) {
+		event.preventDefault();
+	}
+}
+
 // 结束拖动
 function endDrag() {
 	isDragging = false;
+	saveLanternPosition();
+}
+
+// 双击事件处理 - 重置按钮位置并打开灯笼
+function handleDoubleClick() {
+	// 打开灯笼
+	isEnabled = true;
+	saveLanternState();
+
+	// 实现回弹动画效果
+	// 1. 先稍微超过目标位置
+	const bounceOffsetX = -5;
+	const bounceOffsetY = -5;
+
+	// 2. 快速设置到回弹位置
+	offsetX = bounceOffsetX;
+	offsetY = bounceOffsetY;
+
+	// 3. 强制浏览器重排
+	void (document.querySelector(".lantern-toggle-container") as HTMLElement)
+		?.offsetWidth;
+
+	// 4. 动画回到准确位置
+	setTimeout(() => {
+		offsetX = 0;
+		offsetY = 0;
+		saveLanternPosition();
+	}, 50);
+}
+
+// 处理窗口大小变化
+function handleResize() {
+	// 检查设备类型是否发生变化
+	const newDeviceKey = isMobileDevice() ? "mobile" : "desktop";
+	if (newDeviceKey !== currentDeviceKey) {
+		// 设备类型发生变化，重新加载对应设备的位置
+		currentDeviceKey = newDeviceKey;
+		loadLanternPosition();
+	}
 }
 
 // 组件挂载时加载状态
 onMount(() => {
 	loadLanternState();
+	// 初始化设备类型
+	currentDeviceKey = getDeviceStorageKey();
+	loadLanternPosition();
+
+	// 添加窗口大小变化监听
+	window.addEventListener("resize", handleResize);
 
 	// 检查是否是第一次打开网页
 	function isFirstVisit() {
@@ -161,27 +273,36 @@ onMount(() => {
 		window.addEventListener("mousemove", drag);
 		window.addEventListener("mouseup", endDrag);
 		window.addEventListener("mouseleave", endDrag);
-		window.addEventListener("touchmove", drag);
+		window.addEventListener("touchmove", preventScroll, { passive: false });
+		window.addEventListener("touchmove", drag, { passive: false });
 		window.addEventListener("touchend", endDrag);
 
 		return () => {
-			clearInterval(animationInterval);
 			window.removeEventListener("mousemove", drag);
 			window.removeEventListener("mouseup", endDrag);
 			window.removeEventListener("mouseleave", endDrag);
+			window.removeEventListener("touchmove", preventScroll);
 			window.removeEventListener("touchmove", drag);
 			window.removeEventListener("touchend", endDrag);
+			window.removeEventListener("resize", handleResize);
 		};
 	}
 	// 在桌面设备上添加全局鼠标事件监听
 	window.addEventListener("mousemove", drag);
 	window.addEventListener("mouseup", endDrag);
 	window.addEventListener("mouseleave", endDrag);
+	window.addEventListener("touchmove", preventScroll, { passive: false });
+	window.addEventListener("touchmove", drag, { passive: false });
+	window.addEventListener("touchend", endDrag);
 
 	return () => {
 		window.removeEventListener("mousemove", drag);
 		window.removeEventListener("mouseup", endDrag);
 		window.removeEventListener("mouseleave", endDrag);
+		window.removeEventListener("touchmove", preventScroll);
+		window.removeEventListener("touchmove", drag);
+		window.removeEventListener("touchend", endDrag);
+		window.removeEventListener("resize", handleResize);
 	};
 });
 </script>
@@ -242,8 +363,12 @@ onMount(() => {
 	<div 
 		class="lantern-toggle-container"
 		onmousedown={startDrag}
-		touchstart={startDrag}
+		ontouchstart={startDrag}
+		ondblclick={handleDoubleClick}
 		style={`transform: translate(${offsetX + (showDragAnimation ? dragAnimationOffset.x : 0)}px, ${offsetY + (showDragAnimation ? dragAnimationOffset.y : 0)}px); cursor: ${isDragging ? 'grabbing' : 'grab'}`}
+		tabindex="0"
+		role="button"
+		aria-label="拖拽灯笼控制开关，双击重置位置并打开灯笼"
 	>
 		<button 
 			class="lantern-toggle" 
@@ -385,7 +510,7 @@ onMount(() => {
 	
 	.lantern-toggle-container {
 		position: relative;
-		transition: transform 0.1s ease-out;
+		transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 	}
 	
 	.lantern-toggle {
