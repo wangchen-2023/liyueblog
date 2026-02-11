@@ -35,4 +35,10 @@ export const zh_CN: Translation = {
 	[Key.author]: "作者",
 	[Key.publishedAt]: "发布于",
 	[Key.license]: "许可协议",
+
+	[Key.pageNotFound]: "页面未找到",
+	[Key.pageNotFoundDescription]: "抱歉，您访问的页面不存在或已被移动。",
+	[Key.backToHome]: "返回首页",
+	[Key.viewArchives]: "查看归档",
+	[Key.pageNotFoundHint]: "可能您输入了错误的地址，或者页面已被删除。",
 };

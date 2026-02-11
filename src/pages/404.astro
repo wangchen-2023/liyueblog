@@ -1,0 +1,142 @@
+﻿---
+import { Icon } from "astro-icon/components";
+import I18nKey from "@i18n/i18nKey";
+import { i18n } from "@i18n/translation";
+import MainGridLayout from "@layouts/MainGridLayout.astro";
+import { siteConfig } from "@/config";
+import { getSortedPostsList } from "@utils/content-utils";
+import { getPostUrlBySlug, url } from "@utils/url-utils";
+
+const keys = I18nKey as unknown as Record<string, I18nKey | undefined>;
+const isZh = siteConfig.lang.toLowerCase().startsWith("zh");
+
+const notFoundTitle = i18n(keys.notFoundTitle ?? I18nKey.pageNotFound);
+const notFoundDescription = i18n(
+	keys.notFoundDescription ?? I18nKey.pageNotFoundDescription,
+);
+const notFoundHint = i18n(keys.notFoundHint ?? I18nKey.pageNotFoundHint);
+
+const goBackLabel = keys.goBack
+	? i18n(keys.goBack)
+	: isZh
+		? "返回上一页"
+		: "Go Back";
+const goHomeLabel = keys.goHome ? i18n(keys.goHome) : i18n(I18nKey.backToHome);
+const goArchiveLabel = keys.goArchive
+	? i18n(keys.goArchive)
+	: i18n(I18nKey.viewArchives);
+const randomPostLabel = keys.randomPost
+	? i18n(keys.randomPost)
+	: isZh
+		? "随机文章"
+		: "Random Post";
+
+const allPosts = await getSortedPostsList();
+const randomPostPool = allPosts.map((post) => ({
+	title: post.data.title || i18n(I18nKey.untitled),
+	url: getPostUrlBySlug(post.slug),
+}));
+
+const fallbackRandomUrl = randomPostPool[0]?.url || url("/");
+const pageTitle = `404 - ${notFoundTitle}`;
+---
+
+<MainGridLayout title={pageTitle} description={notFoundDescription}>
+	<div class="card-base mb-4 onload-animation">
+		<div class="px-6 md:px-9 py-8 md:py-10">
+			<div class="flex items-center gap-3 text-50 mb-4">
+				<div class="h-9 w-9 rounded-lg bg-black/5 dark:bg-white/10 flex items-center justify-center">
+					<Icon
+						name="material-symbols:warning-outline-rounded"
+						class="text-[1.35rem] leading-none translate-y-[0.5px]"
+					/>
+				</div>
+				<span class="text-sm md:text-base tracking-wide">{notFoundTitle}</span>
+			</div>
+
+			<div class="text-[3.25rem] md:text-[4.5rem] font-black leading-none mb-3 text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary)] to-black/70 dark:to-white/80">
+				404
+			</div>
+
+			<p class="text-75 text-base md:text-lg mb-2">{notFoundDescription}</p>
+			<p class="text-50 text-sm md:text-base">{notFoundHint}</p>
+
+			<div class="border-[var(--line-divider)] border-dashed border-b-[1px] my-6"></div>
+
+			<div class="flex flex-wrap gap-3">
+				<button
+					type="button"
+					id="not-found-go-back"
+					class="btn-card h-11 px-4 rounded-xl font-semibold text-black/75 dark:text-white/75 active:scale-95"
+					aria-label={goBackLabel}
+				>
+					<Icon name="material-symbols:arrow-back-rounded" class="text-[1.2rem] mr-2 text-[var(--primary)]" />
+					{goBackLabel}
+				</button>
+				<a
+					href={url("/")}
+					class="btn-card h-11 px-4 rounded-xl font-semibold text-black/75 dark:text-white/75 active:scale-95"
+					aria-label={goHomeLabel}
+				>
+					<Icon name="material-symbols:home-outline-rounded" class="text-[1.2rem] mr-2 text-[var(--primary)]" />
+					{goHomeLabel}
+				</a>
+				<a
+					href={url("/archive/")}
+					class="btn-card h-11 px-4 rounded-xl font-semibold text-black/75 dark:text-white/75 active:scale-95"
+					aria-label={goArchiveLabel}
+				>
+					<Icon name="material-symbols:folder-open-outline-rounded" class="text-[1.2rem] mr-2 text-[var(--primary)]" />
+					{goArchiveLabel}
+				</a>
+				<a
+					id="not-found-random-post"
+					href={fallbackRandomUrl}
+					class="btn-card h-11 px-4 rounded-xl font-semibold text-[var(--primary)] active:scale-95"
+					aria-label={randomPostLabel}
+				>
+					<Icon name="material-symbols:shuffle-rounded" class="text-[1.2rem] mr-2" />
+					{randomPostLabel}
+				</a>
+			</div>
+		</div>
+	</div>
+
+	<script is:inline define:vars={{ homeUrl: url("/"), randomPostPool }}>
+		const goBackBtn = document.getElementById("not-found-go-back");
+		const randomLink = document.getElementById("not-found-random-post");
+
+		const pickRandomPost = () => {
+			if (!Array.isArray(randomPostPool) || randomPostPool.length === 0) {
+				return null;
+			}
+			const index = Math.floor(Math.random() * randomPostPool.length);
+			return randomPostPool[index];
+		};
+
+		if (goBackBtn) {
+			goBackBtn.addEventListener("click", () => {
+				if (window.history.length > 1) {
+					window.history.back();
+					return;
+				}
+				window.location.href = homeUrl;
+			});
+		}
+
+		if (randomLink) {
+			const initialPost = pickRandomPost();
+			if (initialPost) {
+				randomLink.href = initialPost.url;
+				randomLink.title = initialPost.title;
+			}
+
+			randomLink.addEventListener("click", () => {
+				const nextPost = pickRandomPost();
+				if (!nextPost) return;
+				randomLink.href = nextPost.url;
+				randomLink.title = nextPost.title;
+			});
+		}
+	</script>
+</MainGridLayout>

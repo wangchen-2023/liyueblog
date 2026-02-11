@@ -32,6 +32,13 @@ enum I18nKey {
 	author = "author",
 	publishedAt = "publishedAt",
 	license = "license",
+
+	// 404 page
+	pageNotFound = "pageNotFound",
+	pageNotFoundDescription = "pageNotFoundDescription",
+	backToHome = "backToHome",
+	viewArchives = "viewArchives",
+	pageNotFoundHint = "pageNotFoundHint",
 }
 
 export default I18nKey;
