@@ -1,0 +1,141 @@
+---
+import { url } from "@utils/url-utils";
+
+const isPostsRoute = Astro.url.pathname.startsWith(url("/posts/"));
+---
+{isPostsRoute && (
+	<section id="busuanzi-stats-card" class="card-base mt-4 p-4 transition-swup-fade onload-animation">
+		<div
+			class="font-bold transition text-lg text-neutral-900 dark:text-neutral-100 relative ml-8 mb-3
+        before:w-1 before:h-4 before:rounded-md before:bg-[var(--primary)]
+        before:absolute before:left-[-16px] before:top-[5.5px]"
+		>
+			访问统计
+		</div>
+
+		<p class="text-sm text-50">
+			您是本站的第
+			<span id="busuanzi_site_uv_friend" class="text-75 font-semibold">加载中...</span>
+			个小伙伴
+		</p>
+
+		<div class="mt-3 rounded-xl border border-dashed border-[var(--line-divider)] px-3 py-2">
+			<div class="flex items-center justify-between gap-3 py-1.5 text-sm">
+				<span class="text-50">本站总访问量</span>
+				<span class="text-75 font-semibold"><span id="busuanzi_site_pv">加载中...</span> 次</span>
+			</div>
+			<div class="flex items-center justify-between gap-3 py-1.5 text-sm">
+				<span class="text-50">今日总访问量</span>
+				<span class="text-75 font-semibold"><span id="busuanzi_today_pv">加载中...</span> 次</span>
+			</div>
+			<div class="flex items-center justify-between gap-3 py-1.5 text-sm">
+				<span class="text-50">今日总访客数</span>
+				<span class="text-75 font-semibold"><span id="busuanzi_today_uv">加载中...</span> 人</span>
+			</div>
+			<div class="flex items-center justify-between gap-3 py-1.5 text-sm">
+				<span class="text-50">本站总访客数</span>
+				<span class="text-75 font-semibold"><span id="busuanzi_site_uv">加载中...</span> 人</span>
+			</div>
+			<div class="flex items-center justify-between gap-3 py-1.5 text-sm">
+				<span class="text-50">本页总阅读量</span>
+				<span class="text-75 font-semibold"><span id="busuanzi_page_pv">加载中...</span> 次</span>
+			</div>
+			<div class="flex items-center justify-between gap-3 py-1.5 text-sm">
+				<span class="text-50">本页总访客数</span>
+				<span class="text-75 font-semibold"><span id="busuanzi_page_uv">加载中...</span> 人</span>
+			</div>
+		</div>
+	</section>
+)}
+
+{isPostsRoute && (
+	<script is:inline>
+		(() => {
+			const SCRIPT_ID = "busuanzi-counter-script";
+			const SCRIPT_SRC = "https://cdn.busuanzi.cc/busuanzi/3.6.9/busuanzi.min.js";
+
+			const syncFriendCounter = () => {
+				const siteUv = document.getElementById("busuanzi_site_uv");
+				const friendUv = document.getElementById("busuanzi_site_uv_friend");
+				if (!siteUv || !friendUv) return;
+
+				const value = siteUv.textContent?.trim();
+				if (value) {
+					friendUv.textContent = value;
+				}
+			};
+
+			const bindFriendObserver = () => {
+				const siteUv = document.getElementById("busuanzi_site_uv");
+				if (!siteUv) return;
+
+				const prevObserver = window["__busuanziSiteUvObserver"];
+				if (prevObserver && typeof prevObserver.disconnect === "function") {
+					prevObserver.disconnect();
+				}
+
+				const observer = new MutationObserver(() => {
+					syncFriendCounter();
+				});
+				observer.observe(siteUv, {
+					childList: true,
+					subtree: true,
+					characterData: true,
+				});
+				window["__busuanziSiteUvObserver"] = observer;
+			};
+
+			const loadBusuanzi = () => {
+				window["busuanziRequestSent"] = false;
+
+				const oldScript = document.getElementById(SCRIPT_ID);
+				if (oldScript) {
+					oldScript.remove();
+				}
+
+				const script = document.createElement("script");
+				script.id = SCRIPT_ID;
+				script.src = SCRIPT_SRC;
+				script.defer = true;
+				script.onload = () => {
+					setTimeout(syncFriendCounter, 80);
+				};
+				document.head.appendChild(script);
+			};
+
+			const isPostPage = () => window.location.pathname.includes("/posts/");
+
+			const refreshBusuanzi = () => {
+				if (!isPostPage()) {
+					const prevObserver = window["__busuanziSiteUvObserver"];
+					if (prevObserver && typeof prevObserver.disconnect === "function") {
+						prevObserver.disconnect();
+					}
+					return;
+				}
+
+				loadBusuanzi();
+				bindFriendObserver();
+				setTimeout(syncFriendCounter, 120);
+			};
+
+			const bindSwupHook = () => {
+				if (!window.swup?.hooks) return;
+				if (window["__busuanziSwupHooked"]) return;
+
+				window["__busuanziSwupHooked"] = true;
+				window.swup.hooks.on("page:view", () => {
+					refreshBusuanzi();
+				});
+			};
+
+			refreshBusuanzi();
+
+			if (window.swup?.hooks) {
+				bindSwupHook();
+			} else {
+				document.addEventListener("swup:enable", bindSwupHook, { once: true });
+			}
+		})();
+	</script>
+)}

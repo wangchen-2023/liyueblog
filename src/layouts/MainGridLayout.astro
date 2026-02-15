@@ -1,5 +1,6 @@
 ---
 import BackToTop from "@components/control/BackToTop.astro";
+import BusuanziStats from "@components/widget/BusuanziStats.astro";
 import Footer from "@components/Footer.astro";
 import Navbar from "@components/Navbar.astro";
 import SideBar from "@components/widget/SideBar.astro";
@@ -13,6 +14,7 @@ import {
 	BANNER_HEIGHT_EXTEND,
 	MAIN_PANEL_OVERLAPS_BANNER_HEIGHT,
 } from "../constants/constants";
+import { url } from "../utils/url-utils";
 import Layout from "./Layout.astro";
 
 interface Props {
@@ -35,6 +37,7 @@ const {
 const hasBannerCredit =
 	siteConfig.banner.enable && siteConfig.banner.credit.enable;
 const hasBannerLink = !!siteConfig.banner.credit.url;
+const isPostsRoute = Astro.url.pathname.startsWith(url("/posts/"));
 
 const mainPanelTop = siteConfig.banner.enable
 	? `calc(${BANNER_HEIGHT}vh - ${MAIN_PANEL_OVERLAPS_BANNER_HEIGHT}rem)`
@@ -106,20 +109,20 @@ const mainPanelTop = siteConfig.banner.enable
 <div class="absolute w-full z-0 hidden 2xl:block">
     <div class="relative max-w-[var(--page-width)] mx-auto">
         <!-- TOC component -->
-        {siteConfig.toc.enable && <div id="toc-wrapper" class:list={["hidden lg:block transition absolute top-0 -right-[var(--toc-width)] w-[var(--toc-width)] items-center",
-            {"toc-hide": siteConfig.banner.enable}]}
-        >
+        {(siteConfig.toc.enable || isPostsRoute) && <div id="toc-wrapper" class:list={["hidden lg:block transition absolute top-0 -right-[var(--toc-width)] w-[var(--toc-width)] items-center",
+            {"toc-hide": siteConfig.banner.enable}]}>
             <div id="toc-inner-wrapper" class="fixed top-14 w-[var(--toc-width)] h-[calc(100vh_-_20rem)] overflow-y-scroll overflow-x-hidden hide-scrollbar">
                 <div id="toc" class="w-full h-full transition-swup-fade ">
                     <div class="h-8 w-full"></div>
-                    <TOC headings={headings}></TOC>
+                    {siteConfig.toc.enable && <TOC headings={headings}></TOC>}
+                    <BusuanziStats></BusuanziStats>
                     <div class="h-8 w-full"></div>
                 </div>
             </div>
         </div>}
 
         <!-- #toc needs to exist for Swup to work normally -->
-        {!siteConfig.toc.enable && <div id="toc"></div>}
+        {!(siteConfig.toc.enable || isPostsRoute) && <div id="toc"></div>}
     </div>
 </div>
 </Layout>
