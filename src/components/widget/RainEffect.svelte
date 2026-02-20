@@ -33,6 +33,10 @@ let recycleXPadding = 0;
 let particles: RainDrop[] = [];
 let animationFrame: number | null = null;
 let enabled = false;
+let lastFrameTime: number | null = null;
+
+const TARGET_FRAME_MS = 1000 / 60;
+const PAUSE_RESET_MS = 160;
 
 class RainDrop {
 	x = 0;
@@ -80,9 +84,10 @@ class RainDrop {
 		target.stroke();
 	}
 
-	update() {
-		this.y += runtimeConfig.speed * this.vMult;
-		this.x += runtimeConfig.speed * this.vMult * runtimeConfig.angle;
+	update(frameScale: number) {
+		const deltaSpeed = runtimeConfig.speed * this.vMult * frameScale;
+		this.y += deltaSpeed;
+		this.x += deltaSpeed * runtimeConfig.angle;
 
 		if (
 			this.y > recycleY ||
@@ -117,19 +122,17 @@ function getRenderProfile(): RenderProfile {
 					}
 				).deviceMemory || 8
 			: 8;
-	// Check if rainbow mode is enabled
-	const rainbowModeEnabled =
-		document.documentElement.classList.contains("rainbow-mode");
 	const lowPower =
 		reducedMotion || coarsePointer || cpuCores <= 4 || memory <= 4;
 
-	// If rainbow mode is enabled, use more conservative settings but preserve speed
-	if (lowPower || rainbowModeEnabled) {
+	// Only degrade rain rendering on genuinely low-power environments.
+	// Rainbow mode should not alter rain appearance.
+	if (lowPower) {
 		return {
 			maxDpr: 1.5,
-			countScale: rainbowModeEnabled ? 0.6 : 0.45,
-			speedScale: rainbowModeEnabled ? 1 : 0.9, // Preserve speed for rainbow mode
-			useSimpleStroke: rainbowModeEnabled || lowPower,
+			countScale: 0.45,
+			speedScale: 0.9,
+			useSimpleStroke: true,
 		};
 	}
 	return {
@@ -186,16 +189,45 @@ function setupParticles() {
 	}
 }
 
+function syncParticleCount() {
+	const targetCount = runtimeConfig.count;
+	if (particles.length > targetCount) {
+		particles.length = targetCount;
+		return;
+	}
+	for (let i = particles.length; i < targetCount; i += 1) {
+		particles.push(new RainDrop());
+	}
+}
+
 function clearCanvas() {
 	if (!ctx) return;
 	ctx.clearRect(0, 0, width, height);
 }
 
-function animate() {
+function getFrameScale(now: number): number {
+	if (lastFrameTime === null) {
+		lastFrameTime = now;
+		return 1;
+	}
+	const deltaMs = now - lastFrameTime;
+	lastFrameTime = now;
+	if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
+		return 1;
+	}
+	if (deltaMs >= PAUSE_RESET_MS) {
+		// Treat long stalls as pauses to avoid giant jumps after tab switches.
+		return 1;
+	}
+	return deltaMs / TARGET_FRAME_MS;
+}
+
+function animate(now: number) {
 	if (!ctx || !enabled) return;
+	const frameScale = getFrameScale(now);
 	ctx.clearRect(0, 0, width, height);
 	for (const p of particles) {
-		p.update();
+		p.update(frameScale);
 		p.draw(ctx);
 	}
 	animationFrame = window.requestAnimationFrame(animate);
@@ -209,6 +241,7 @@ function start() {
 	updateRuntimeConfig();
 	resizeCanvas();
 	setupParticles();
+	lastFrameTime = null;
 	animationFrame = window.requestAnimationFrame(animate);
 }
 
@@ -219,6 +252,7 @@ function stop() {
 		window.cancelAnimationFrame(animationFrame);
 		animationFrame = null;
 	}
+	lastFrameTime = null;
 	clearCanvas();
 }
 
@@ -244,8 +278,13 @@ function handleConfigEvent(event: Event) {
 		next.speed !== config.speed;
 	config = next;
 	updateRuntimeConfig();
-	if (enabled && (countChanged || geometryChanged)) {
+	if (!enabled) return;
+	if (geometryChanged) {
 		setupParticles();
+		return;
+	}
+	if (countChanged) {
+		syncParticleCount();
 	}
 }
 
@@ -262,7 +301,9 @@ function handleRainbowModeChange() {
 	// Update render profile based on new rainbow mode status
 	profile = getRenderProfile();
 	updateRuntimeConfig();
-	setupParticles();
+	resizeCanvas();
+	syncParticleCount();
+	lastFrameTime = null;
 }
 
 onMount(() => {

@@ -13,6 +13,48 @@ let showDragAnimation = false;
 let dragAnimationOffset = { x: 0, y: 0 };
 let currentDeviceKey = "";
 
+const MIN_VISIBLE_PIXELS = 32;
+
+function clamp(value: number, min: number, max: number): number {
+	return Math.min(max, Math.max(min, value));
+}
+
+function getToggleElements() {
+	const control = document.querySelector(".lantern-control") as HTMLElement | null;
+	const toggle = document.querySelector(
+		".lantern-toggle-container",
+	) as HTMLElement | null;
+	return { control, toggle };
+}
+
+function clampOffsetToViewport() {
+	if (typeof window === "undefined") return;
+	const { control, toggle } = getToggleElements();
+	if (!control || !toggle) return;
+
+	const toggleRect = toggle.getBoundingClientRect();
+	const toggleWidth = toggleRect.width || 140;
+	const toggleHeight = toggleRect.height || 44;
+	const controlStyle = window.getComputedStyle(control);
+	const right = Number.parseFloat(controlStyle.right) || 0;
+	const bottom = Number.parseFloat(controlStyle.bottom) || 0;
+
+	const baseLeft = window.innerWidth - right - toggleWidth;
+	const baseTop = window.innerHeight - bottom - toggleHeight;
+	const minLeft = -(toggleWidth - MIN_VISIBLE_PIXELS);
+	const maxLeft = window.innerWidth - MIN_VISIBLE_PIXELS;
+	const minTop = -(toggleHeight - MIN_VISIBLE_PIXELS);
+	const maxTop = window.innerHeight - MIN_VISIBLE_PIXELS;
+
+	const minOffsetX = minLeft - baseLeft;
+	const maxOffsetX = maxLeft - baseLeft;
+	const minOffsetY = minTop - baseTop;
+	const maxOffsetY = maxTop - baseTop;
+
+	offsetX = clamp(offsetX, minOffsetX, maxOffsetX);
+	offsetY = clamp(offsetY, minOffsetY, maxOffsetY);
+}
+
 // 触摸事件相关变量 - 用于检测双击
 let lastTapTime = 0;
 const DOUBLE_TAP_THRESHOLD = 300;
@@ -66,8 +108,10 @@ function loadLanternPosition() {
 		if (savedPosition !== null) {
 			try {
 				const position = JSON.parse(savedPosition);
-				offsetX = position.x || 0;
-				offsetY = position.y || 0;
+				const x = Number(position?.x);
+				const y = Number(position?.y);
+				offsetX = Number.isFinite(x) ? x : 0;
+				offsetY = Number.isFinite(y) ? y : 0;
 			} catch {
 				// 解析失败，使用默认值
 				offsetX = 0;
@@ -159,6 +203,7 @@ function preventScroll(event: TouchEvent) {
 // 结束拖动
 function endDrag() {
 	isDragging = false;
+	clampOffsetToViewport();
 	saveLanternPosition();
 }
 
@@ -197,7 +242,14 @@ function handleResize() {
 		// 设备类型发生变化，重新加载对应设备的位置
 		currentDeviceKey = newDeviceKey;
 		loadLanternPosition();
+		requestAnimationFrame(() => {
+			clampOffsetToViewport();
+			saveLanternPosition();
+		});
+		return;
 	}
+	clampOffsetToViewport();
+	saveLanternPosition();
 }
 
 // 组件挂载时加载状态
@@ -206,6 +258,10 @@ onMount(() => {
 	// 初始化设备类型
 	currentDeviceKey = getDeviceStorageKey();
 	loadLanternPosition();
+	requestAnimationFrame(() => {
+		clampOffsetToViewport();
+		saveLanternPosition();
+	});
 
 	// 添加窗口大小变化监听
 	window.addEventListener("resize", handleResize);

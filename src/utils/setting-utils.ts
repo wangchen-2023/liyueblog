@@ -145,8 +145,7 @@ export function setBackgroundDisabled(disabled: boolean): void {
 // Rainbow mode settings
 let rainbowInterval: number | null = null;
 let currentHue = 0;
-let lastUpdateTime = 0;
-const UPDATE_INTERVAL = 30; // Target update interval in milliseconds
+const UPDATE_INTERVAL = 45; // Reduce repaint pressure when rainbow mode is on.
 
 export function getRainbowMode(): boolean {
 	if (!canUseStorage()) {
@@ -156,13 +155,8 @@ export function getRainbowMode(): boolean {
 }
 
 function updateRainbowHue(root: HTMLElement): void {
-	const now = performance.now();
-	if (now - lastUpdateTime >= UPDATE_INTERVAL) {
-		currentHue = (currentHue + 1) % 360;
-		root.style.setProperty("--hue", String(currentHue));
-		lastUpdateTime = now;
-	}
-	rainbowInterval = requestAnimationFrame(() => updateRainbowHue(root));
+	currentHue = (currentHue + 1) % 360;
+	root.style.setProperty("--hue", String(currentHue));
 }
 
 export function setRainbowMode(enabled: boolean): void {
@@ -175,17 +169,21 @@ export function setRainbowMode(enabled: boolean): void {
 
 	root.classList.toggle("rainbow-mode", enabled);
 
-	// Clear any existing animation frame
-	if (rainbowInterval) {
-		cancelAnimationFrame(rainbowInterval);
+	// Clear any existing rainbow timer.
+	if (rainbowInterval !== null) {
+		clearInterval(rainbowInterval);
 		rainbowInterval = null;
 	}
 
 	if (enabled) {
-		// Start rainbow effect with JavaScript using requestAnimationFrame
-		currentHue = Number.parseInt(root.style.getPropertyValue("--hue"), 10) || 0;
-		lastUpdateTime = performance.now();
+		// Start rainbow effect using a fixed interval to avoid per-frame callbacks.
+		currentHue =
+			Number.parseInt(root.style.getPropertyValue("--hue"), 10) || getHue();
 		updateRainbowHue(root);
+		rainbowInterval = window.setInterval(
+			() => updateRainbowHue(root),
+			UPDATE_INTERVAL,
+		);
 	} else {
 		// Restore the original hue from localStorage
 		const hue = getHue();
