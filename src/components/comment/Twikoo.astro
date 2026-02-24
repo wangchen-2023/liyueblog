@@ -120,9 +120,74 @@ const config = {
 
   // 监听 Astro 的页面加载事件
   document.addEventListener('astro:page-load', setupLazyLoading);
+
+  // 监听 Swup 页面过渡事件
+  function setupSwupHooks() {
+    if (window.swup) {
+      // 在内容替换前清理旧的 Twikoo 实例
+      window.swup.hooks.on('content:replace', () => {
+        console.log('Swup: 内容替换前，清理旧的 Twikoo 实例');
+        // 移除 Twikoo 脚本
+        const script = document.getElementById('twikoo-script');
+        if (script) {
+          script.remove();
+        }
+        // 清理评论容器
+        const commentContainer = document.getElementById('comment');
+        if (commentContainer) {
+          commentContainer.innerHTML = `
+            <div class="text-center text-gray-500 dark:text-white/75 p-8">
+              <p>评论区加载中...</p>
+              <p class="text-sm mt-2">如果长时间无法显示，请尝试刷新页面。</p>
+            </div>
+          `;
+        }
+        // 清理 window.twikoo 实例
+        if (window.twikoo) {
+          console.log('清理 window.twikoo 实例');
+          // 尝试销毁实例（如果有 destroy 方法）
+          if (window.twikoo.destroy) {
+            window.twikoo.destroy();
+          }
+          // 移除 twikoo 对象
+          delete window.twikoo;
+        }
+      });
+
+      // 在页面视图加载后重新初始化
+      window.swup.hooks.on('page:view', () => {
+        console.log('Swup: 页面视图加载后，重新初始化评论区');
+        setupLazyLoading();
+      });
+    } else {
+      // 如果 Swup 还未加载，监听其启用事件
+      document.addEventListener('swup:enable', setupSwupHooks);
+    }
+  }
+
+  // 设置 Swup 钩子
+  setupSwupHooks();
 </script>
 <style>
   .comment-container {
     min-height: 200px;
+    width: 100%;
+    position: relative;
+    z-index: 1;
+  }
+
+  #comment {
+    width: 100%;
+    position: relative;
+  }
+
+  /* 确保评论区的弹窗和下拉菜单正确显示 */
+  .twikoo {
+    z-index: 10 !important;
+  }
+
+  .twikoo .el-dropdown-menu,
+  .twikoo .el-dialog {
+    z-index: 1000 !important;
   }
 </style>
