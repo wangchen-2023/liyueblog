@@ -58,14 +58,19 @@ export const profileConfig: ProfileConfig = {
 	bio: "欢迎来到璃月小站，这里的内容有的可能会帮到你哦",
 	links: [
 		{
-			name: "GitHub",
-			icon: "fa6-brands:github",
-			url: "https://github.com/saicaca/fuwari",
+			name: "QQ",
+			icon: "fa6-brands:qq",
+			url: "https://qm.qq.com/q/ThtEduGcIQ",
 		},
 		{
-			name: "Twitter",
-			icon: "fa6-brands:twitter",
-			url: "https://twitter.com",
+			name: "biliBili",
+			icon: "fa6-brands:bilibili",
+			url: "https://space.bilibili.com/1689293875",
+		},
+		{
+			name: "github",
+			icon: "fa6-brands:github",
+			url: "https://github.com/wangchen-2023",
 		},
 	],
 };

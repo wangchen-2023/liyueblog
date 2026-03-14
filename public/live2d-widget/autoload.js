@@ -37,14 +37,22 @@ if (screen.width >= 768) {
 			waifuPath: live2d_path + "waifu-tips.json",
 			modelsPath: live2d_path + "model",
 			modelListPath: live2d_path + "model/model_list.json",
-			tools: ["hitokoto", "asteroids", "switch-model", "switch-texture", "photo", "info", "quit"]
+			tools: ["hitokoto", "asteroids", "switch-model", "switch-texture", "photo", "info", "mute", "quit"]
 		});
 
 		// 添加摸头效果
+		const isWaifuMuted = () => {
+			try {
+				return localStorage.getItem("waifu-muted") === "1";
+			} catch (error) {
+				console.warn("Failed to read waifu mute state.", error);
+				return false;
+			}
+		};
 		let headPatting = false;
 		let lastX = 0;
 		let headPatCount = 0;
-		const headPatMessages = ["干，干嘛啊？", "不要摸啦！", "好痒~", "住手！", "讨厌啦~", "摸头什么的...", "嗯~ 这样...有点舒服", "坏蛋，就知道欺负人家", "心跳得好快...", "最喜欢被摸头了~", "摩多摩多~", "别停嘛~", "啊...那里..."];
+		const headPatMessages = ["欸，突然摸头干嘛呀？", "好啦好啦，别一直摸嘛。", "有点痒，你轻一点。", "住手住手，我发型要乱了！", "讨厌，你怎么又来逗我。", "摸头之前至少先说一声嘛。", "唔……这样好像还挺舒服的。", "坏蛋，就知道趁机欺负我。", "别闹啦，我都快不好意思了。", "其实……再摸一下也不是不行。", "嗯哼，再来一点点？", "好了啦，差不多可以停了。", "喂，不许趁机乱碰。"];
 
 		const live2dElement = document.getElementById("live2d");
 		if (live2dElement) {
@@ -64,6 +72,11 @@ if (screen.width >= 768) {
 							headPatCount++;
 							// 降低触发门槛，提高频率
 							if (headPatCount > 1 && !headPatting) {
+								if (isWaifuMuted()) {
+									headPatCount = 0;
+									lastX = x;
+									return;
+								}
 								headPatting = true;
 								// 显示摸头提示语
 								const randomMessage = headPatMessages[Math.floor(Math.random() * headPatMessages.length)];
