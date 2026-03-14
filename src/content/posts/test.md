@@ -2,7 +2,7 @@
 title: "test"
 published: 2026-03-01
 description: "11"
-image: "1"
+image: ""
 tags:
   - "1"
 category: "1"
