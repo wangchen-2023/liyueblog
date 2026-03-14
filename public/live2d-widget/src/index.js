@@ -26,9 +26,14 @@ function loadWidget(config) {
         }
         for (let tool of config.tools) {
             if (tools[tool]) {
-                const { icon, callback } = tools[tool];
-                document.getElementById("waifu-tool").insertAdjacentHTML("beforeend", `<span id="waifu-tool-${tool}">${icon}</span>`);
-                document.getElementById(`waifu-tool-${tool}`).addEventListener("click", callback);
+                const { icon, callback, mounted } = tools[tool];
+                const toolElementId = `waifu-tool-${tool}`;
+                document.getElementById("waifu-tool").insertAdjacentHTML("beforeend", `<span id="${toolElementId}">${icon}</span>`);
+                const toolElement = document.getElementById(toolElementId);
+                toolElement.addEventListener("click", callback);
+                if (typeof mounted === "function") {
+                    mounted(toolElement);
+                }
             }
         }
     })();
@@ -64,13 +69,148 @@ function loadWidget(config) {
     }
 
     function registerEventListener(result) {
+        const pageType = document.body?.dataset?.pageType || document.documentElement?.dataset?.pageType || "";
+        const notFoundMessages = Array.isArray(result.message.notFound) ? result.message.notFound : [];
+        const isNotFoundPage = pageType === "404" && notFoundMessages.length > 0;
         // 检测用户活动状态，并在空闲时显示消息
         let userAction = false,
             userActionTimer,
-            messageArray = result.message.default,
+            messageArray = isNotFoundPage ? [...notFoundMessages] : result.message.default,
+            lastHoverSelector,
             lastHoverElement;
+        const interactionMessageIndex = new Map();
+        const devtoolsMessagePriority = 12;
+        const hoverMessageDuration = 4000;
+        const hoverMoveThrottle = 200;
+        const sameElementHoverCooldown = 2500;
+        let lastDevtoolsNoticeAt = 0;
+        let lastHoverTriggeredAt = 0;
+        let lastHoverProcessedAt = 0;
+        const nextInteractionMessage = (key, textList) => {
+            if (!Array.isArray(textList)) {
+                return textList;
+            }
+            const currentIndex = interactionMessageIndex.get(key) || 0;
+            interactionMessageIndex.set(key, (currentIndex + 1) % textList.length);
+            return textList[currentIndex];
+        };
+        const resetHoverState = () => {
+            lastHoverSelector = null;
+            lastHoverElement = null;
+            lastHoverTriggeredAt = 0;
+        };
+        const showDevtoolsMessage = () => {
+            const now = Date.now();
+            if (now - lastDevtoolsNoticeAt < 1500) {
+                return;
+            }
+            lastDevtoolsNoticeAt = now;
+            showMessage(result.message.console, 6000, devtoolsMessagePriority);
+        };
+        const isDevtoolsShortcut = event => {
+            const key = String(event.key || "").toLowerCase();
+            if (key === "f12") {
+                return true;
+            }
+            if ((event.ctrlKey || event.metaKey) && event.shiftKey) {
+                return key === "i" || key === "j" || key === "c";
+            }
+            return false;
+        };
+        const getElementText = element => {
+            if (!element) {
+                return "";
+            }
+            const innerText = element.innerText?.trim();
+            if (innerText) {
+                return innerText;
+            }
+            const title = element.getAttribute?.("title")?.trim();
+            if (title) {
+                return title;
+            }
+            const ariaLabel = element.getAttribute?.("aria-label")?.trim();
+            if (ariaLabel) {
+                return ariaLabel;
+            }
+            return "";
+        };
+        const getElementCount = element => {
+            if (!(element instanceof Element)) {
+                return "";
+            }
+            const ownCount = element.getAttribute("data-waifu-count")?.trim();
+            if (ownCount) {
+                return ownCount;
+            }
+            const countElement = element.querySelector("[data-waifu-count]");
+            if (!countElement) {
+                return "";
+            }
+            return countElement.getAttribute("data-waifu-count")?.trim() || getElementText(countElement);
+        };
+        const getElementDisplayText = element => {
+            if (!(element instanceof Element)) {
+                return getElementText(element);
+            }
+            const ownText = element.getAttribute("data-waifu-text")?.trim();
+            if (ownText) {
+                return ownText;
+            }
+            const textElement = element.querySelector("[data-waifu-text]");
+            return getElementText(textElement) || getElementText(element);
+        };
+        const getMatchedTextParts = (matchedElement, targetElement) => {
+            return {
+                text: getElementDisplayText(matchedElement) || getElementDisplayText(targetElement),
+                count: getElementCount(matchedElement) || getElementCount(targetElement)
+            };
+        };
+        const fillInteractionTemplate = (template, matchedElement, targetElement) => {
+            const { text, count } = getMatchedTextParts(matchedElement, targetElement);
+            return template
+                .split("{text}").join(text)
+                .split("{count}").join(count);
+        };
+        const handleHoverInteraction = event => {
+            if (!(event.target instanceof Element)) {
+                resetHoverState();
+                return;
+            }
+
+            const now = Date.now();
+            if (event.type === "mousemove" && now - lastHoverProcessedAt < hoverMoveThrottle) {
+                return;
+            }
+            lastHoverProcessedAt = now;
+
+            for (let { selector, text } of result.mouseover) {
+                const matchedElement = event.target.closest(selector);
+                if (!matchedElement) continue;
+
+                const isSameHoverTarget = lastHoverSelector === selector && lastHoverElement === matchedElement;
+                if (isSameHoverTarget && now - lastHoverTriggeredAt < sameElementHoverCooldown) {
+                    return;
+                }
+
+                lastHoverSelector = selector;
+                lastHoverElement = matchedElement;
+                lastHoverTriggeredAt = now;
+                text = nextInteractionMessage(`mouseover:${selector}`, text);
+                text = fillInteractionTemplate(text, matchedElement, event.target);
+                showMessage(text, hoverMessageDuration, 8);
+                return;
+            }
+
+            resetHoverState();
+        };
         window.addEventListener("mousemove", () => userAction = true);
-        window.addEventListener("keydown", () => userAction = true);
+        window.addEventListener("keydown", event => {
+            userAction = true;
+            if (isDevtoolsShortcut(event)) {
+                showDevtoolsMessage();
+            }
+        });
         setInterval(() => {
             if (userAction) {
                 userAction = false;
@@ -82,23 +222,28 @@ function loadWidget(config) {
                 }, 20000);
             }
         }, 1000);
-        showMessage(welcomeMessage(result.time), 7000, 11);
-        window.addEventListener("mouseover", event => {
-            for (let { selector, text } of result.mouseover) {
-                if (!event.target.closest(selector)) continue;
-                if (lastHoverElement === selector) return;
-                lastHoverElement = selector;
-                text = randomSelection(text);
-                text = text.replace("{text}", event.target.innerText);
-                showMessage(text, 4000, 8);
-                return;
+        const initialMessage = isNotFoundPage
+            ? (result.message.notFoundWelcome || notFoundMessages[0] || welcomeMessage(result.time))
+            : welcomeMessage(result.time);
+        showMessage(initialMessage, 7000, 11);
+        window.addEventListener("mouseover", handleHoverInteraction);
+        window.addEventListener("mousemove", handleHoverInteraction);
+        window.addEventListener("mouseout", event => {
+            if (
+                !lastHoverElement ||
+                !(event.relatedTarget instanceof Element) ||
+                !lastHoverElement.contains(event.relatedTarget)
+            ) {
+                resetHoverState();
             }
         });
         window.addEventListener("click", event => {
+            if (!(event.target instanceof Element)) return;
             for (let { selector, text } of result.click) {
-                if (!event.target.closest(selector)) continue;
-                text = randomSelection(text);
-                text = text.replace("{text}", event.target.innerText);
+                const matchedElement = event.target.closest(selector);
+                if (!matchedElement) continue;
+                text = nextInteractionMessage(`click:${selector}`, text);
+                text = fillInteractionTemplate(text, matchedElement, event.target);
                 showMessage(text, 4000, 8);
                 return;
             }
@@ -114,11 +259,6 @@ function loadWidget(config) {
             }
         });
 
-        const devtools = () => { };
-        console.log("%c", devtools);
-        devtools.toString = () => {
-            showMessage(result.message.console, 6000, 9);
-        };
         window.addEventListener("copy", () => {
             showMessage(result.message.copy, 6000, 9);
         });
@@ -138,7 +278,10 @@ function loadWidget(config) {
         model.loadModel(modelId, modelTexturesId);
         fetch(config.waifuPath)
             .then(response => response.json())
-            .then(registerEventListener);
+            .then(registerEventListener)
+            .catch(error => {
+                console.error("Failed to load waifu tips.", error);
+            });
     })();
 }
 

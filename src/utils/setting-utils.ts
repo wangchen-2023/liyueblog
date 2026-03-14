@@ -285,6 +285,131 @@ export function setRainMode(enabled: boolean): void {
 	}
 }
 
+// Developer mode settings
+const DEV_EDITOR_ENABLED_KEY = "devEditorEnabled";
+const DEV_EDITOR_CREDENTIAL_STORAGE_KEY = "devEditorCredential";
+const DEV_EDITOR_LEGACY_CODE_STORAGE_KEY = "devEditorCode";
+const DEV_EDITOR_AUTO_LOCK_AT_KEY = "devEditorAutoLockAt";
+const DEV_EDITOR_SESSION_KEY = "devEditorSessionActive";
+const DEV_EDITOR_AUTO_LOCK_DELAY_MS = 10 * 60 * 1000;
+
+function emitDeveloperModeChange(enabled: boolean): void {
+	if (typeof window !== "undefined") {
+		window.dispatchEvent(
+			new CustomEvent("developer-mode-change", { detail: enabled }),
+		);
+	}
+}
+
+function getDeveloperModeAutoLockAt(): number | null {
+	const raw = localStorage.getItem(DEV_EDITOR_AUTO_LOCK_AT_KEY);
+	if (!raw) {
+		return null;
+	}
+	const parsed = Number.parseInt(raw, 10);
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		localStorage.removeItem(DEV_EDITOR_AUTO_LOCK_AT_KEY);
+		return null;
+	}
+	return parsed;
+}
+
+function hasDeveloperModeSession(): boolean {
+	if (typeof window === "undefined" || typeof window.sessionStorage === "undefined") {
+		return false;
+	}
+	try {
+		return sessionStorage.getItem(DEV_EDITOR_SESSION_KEY) === "true";
+	} catch {
+		return false;
+	}
+}
+
+function expireDeveloperModeIfNeeded(): boolean {
+	if (!canUseStorage()) {
+		return false;
+	}
+	if (localStorage.getItem(DEV_EDITOR_ENABLED_KEY) !== "true") {
+		return false;
+	}
+	if (!hasDeveloperModeSession()) {
+		localStorage.setItem(DEV_EDITOR_ENABLED_KEY, "false");
+		localStorage.removeItem(DEV_EDITOR_AUTO_LOCK_AT_KEY);
+		localStorage.removeItem(DEV_EDITOR_CREDENTIAL_STORAGE_KEY);
+		localStorage.removeItem(DEV_EDITOR_LEGACY_CODE_STORAGE_KEY);
+		emitDeveloperModeChange(false);
+		return true;
+	}
+	const autoLockAt = getDeveloperModeAutoLockAt();
+	if (!autoLockAt || Date.now() < autoLockAt) {
+		return false;
+	}
+	localStorage.setItem(DEV_EDITOR_ENABLED_KEY, "false");
+	localStorage.removeItem(DEV_EDITOR_AUTO_LOCK_AT_KEY);
+	localStorage.removeItem(DEV_EDITOR_CREDENTIAL_STORAGE_KEY);
+	localStorage.removeItem(DEV_EDITOR_LEGACY_CODE_STORAGE_KEY);
+	emitDeveloperModeChange(false);
+	return true;
+}
+
+export function getDeveloperModeEnabled(): boolean {
+	if (!canUseStorage()) {
+		return false;
+	}
+	if (expireDeveloperModeIfNeeded()) {
+		return false;
+	}
+	return localStorage.getItem(DEV_EDITOR_ENABLED_KEY) === "true";
+}
+
+export function setDeveloperModeEnabled(
+	enabled: boolean,
+	options: { emitEvent?: boolean } = {},
+): void {
+	if (!canUseStorage()) {
+		return;
+	}
+	localStorage.setItem(DEV_EDITOR_ENABLED_KEY, String(enabled));
+	localStorage.removeItem(DEV_EDITOR_AUTO_LOCK_AT_KEY);
+	try {
+		if (enabled) {
+			sessionStorage.setItem(DEV_EDITOR_SESSION_KEY, "true");
+		} else {
+			sessionStorage.removeItem(DEV_EDITOR_SESSION_KEY);
+		}
+	} catch (_error) {
+		// Ignore storage exceptions; developer mode will fail closed.
+	}
+	if (!enabled) {
+		localStorage.removeItem(DEV_EDITOR_CREDENTIAL_STORAGE_KEY);
+		localStorage.removeItem(DEV_EDITOR_LEGACY_CODE_STORAGE_KEY);
+	}
+	if (options.emitEvent !== false) {
+		emitDeveloperModeChange(enabled);
+	}
+}
+
+export function clearDeveloperModeAutoLock(): void {
+	if (!canUseStorage()) {
+		return;
+	}
+	localStorage.removeItem(DEV_EDITOR_AUTO_LOCK_AT_KEY);
+}
+
+export function scheduleDeveloperModeAutoLock(
+	delayMs = DEV_EDITOR_AUTO_LOCK_DELAY_MS,
+): void {
+	if (!canUseStorage()) {
+		return;
+	}
+	if (localStorage.getItem(DEV_EDITOR_ENABLED_KEY) !== "true") {
+		return;
+	}
+	const safeDelay = Math.max(0, Math.floor(delayMs));
+	const autoLockAt = Date.now() + safeDelay;
+	localStorage.setItem(DEV_EDITOR_AUTO_LOCK_AT_KEY, String(autoLockAt));
+}
+
 // Background blur settings
 export function getBackgroundBlur(): number {
 	if (!canUseStorage()) {

@@ -10,6 +10,7 @@ import {
 	getBackgroundBlur,
 	getBackgroundDisabled,
 	getDefaultHue,
+	getDeveloperModeEnabled,
 	getHue,
 	getRainbowMode,
 	getRainConfig,
@@ -19,6 +20,7 @@ import {
 	setBackgroundBlur,
 	setBackgroundDisabled,
 	setBackgroundIndex,
+	setDeveloperModeEnabled,
 	setHue,
 	setRainbowMode,
 	setRainConfig,
@@ -26,7 +28,13 @@ import {
 } from "@utils/setting-utils";
 import { onMount } from "svelte";
 import { cubicOut } from "svelte/easing";
-import { fade, scale } from "svelte/transition";
+import { fade, fly, scale } from "svelte/transition";
+import {
+	clearStoredDevCredential,
+	hashDevCodeClient,
+	migrateLegacyDevCodeToCredential,
+	storeDevCredential,
+} from "@utils/dev-auth-client";
 
 let hue = getHue();
 const defaultHue = getDefaultHue();
@@ -47,6 +55,275 @@ let backgroundIndex = getInitialBackgroundIndex();
 let currentBackground = BACKGROUND_OPTIONS[backgroundIndex] ?? null;
 let backgroundTypeLabel = "";
 let backgroundSwitchTimestamp = 0;
+const DEV_EDITOR_REDIRECT_PATH = "/editor";
+const DEV_EDITOR_TOAST_DURATION_MS = 1800;
+const DEV_EDITOR_REDIRECT_DELAY_MS = 500;
+const DEV_EDITOR_LOCK_REDIRECT_DELAY_MS = 500;
+const DEV_EDITOR_OFF_CODE = "liyueoff";
+const DEV_EDITOR_LOCK_REDIRECT_PATH = "/";
+const DEV_EDITOR_UNLOCKED_MESSAGES = [
+	"解锁状态满格，口令键今天休息啦",
+	"你已经在编辑区啦，别逗口令机啦",
+	"门票已生效，直接写文冲冲冲",
+	"口令守卫去喝奶茶了，你随便进",
+	"这里不用二次开门，灵感优先",
+	"已经放行成功，快把新点子写下来",
+];
+const DEV_EDITOR_CLOSED_MESSAGES = [
+	"好啦，编辑器先打烊啦",
+	"收到，创作通道已轻轻关上",
+	"咔哒，编辑器今天先休息一下",
+	"已退出编辑模式，下次再来写喵",
+];
+const DEV_EDITOR_EMPTY_CODE_MESSAGES = [
+	"口令框空空的喵 先喂我点暗号",
+	"什么都没输入 我只能装作听不懂",
+	"小手回车太快啦 先把口令写上",
+  "键盘敲得很自信 结果一个字都没留",
+	"空白也想开门 你对我期待有点高",
+  "回车按得挺果断 口令呢"
+];
+const DEV_EDITOR_WRONG_CODE_MESSAGES = [
+	"暗号差一点点 再想想那个最顺手的",
+	"再试一次吧 我先假装刚才没看见",
+	"差一点就对了 这句话先记在错题本",
+	"再给一条暗号吧 我感觉你快猜中了",
+	"这口令像彩排版 正片再来一次",
+	"门把手动了一下 又冷静回去了",
+];
+let developerModeEnabled = getDeveloperModeEnabled();
+let developerCodeInput = "";
+let unlockToastVisible = false;
+let unlockToastMessage = "";
+let unlockToastTimeout: ReturnType<typeof setTimeout> | null = null;
+let lockRedirectTimeout: ReturnType<typeof setTimeout> | null = null;
+let verifyingDeveloperCode = false;
+let typingVerifyTimer: ReturnType<typeof setTimeout> | null = null;
+let typingVerifyToken = 0;
+let lastMatchedCode = "";
+let lastUnlockedToastMessage = "";
+let lastClosedToastMessage = "";
+let lastEmptyCodeToastMessage = "";
+let lastWrongCodeToastMessage = "";
+
+function pickPlayfulMessage(
+	messages: readonly string[],
+	lastMessage: string,
+): string {
+	if (messages.length === 0) return "";
+	if (messages.length === 1) return messages[0];
+	let next = messages[Math.floor(Math.random() * messages.length)];
+	if (next === lastMessage) {
+		const sameIndex = messages.indexOf(next);
+		next = messages[(sameIndex + 1) % messages.length] || next;
+	}
+	return next;
+}
+
+function showUnlockToast(message: string) {
+	unlockToastMessage = message;
+	unlockToastVisible = true;
+	if (unlockToastTimeout) {
+		clearTimeout(unlockToastTimeout);
+	}
+	unlockToastTimeout = setTimeout(() => {
+		unlockToastVisible = false;
+		unlockToastTimeout = null;
+	}, DEV_EDITOR_TOAST_DURATION_MS);
+}
+
+function cancelTypingCodeVerify() {
+	typingVerifyToken += 1;
+	if (typingVerifyTimer) {
+		clearTimeout(typingVerifyTimer);
+		typingVerifyTimer = null;
+	}
+}
+
+function cancelLockRedirect() {
+	if (!lockRedirectTimeout) return;
+	clearTimeout(lockRedirectTimeout);
+	lockRedirectTimeout = null;
+}
+
+function redirectToDeveloperEditor() {
+	if (typeof window === "undefined") return;
+	const currentPath = window.location.pathname || "";
+	if (currentPath.startsWith(DEV_EDITOR_REDIRECT_PATH)) return;
+	window.location.href = DEV_EDITOR_REDIRECT_PATH;
+}
+
+function isProtectedDeveloperPage(pathname: string): boolean {
+	return (
+		pathname.startsWith(DEV_EDITOR_REDIRECT_PATH) ||
+		pathname.startsWith("/drafts") ||
+		pathname.startsWith("/trash")
+	);
+}
+
+function redirectAfterDeveloperModeLocked() {
+	if (typeof window === "undefined") return;
+	cancelLockRedirect();
+	const currentPath = window.location.pathname || "";
+	const shouldLeaveProtectedPage = isProtectedDeveloperPage(currentPath);
+	if (!shouldLeaveProtectedPage) {
+		return;
+	}
+	lockRedirectTimeout = window.setTimeout(() => {
+		lockRedirectTimeout = null;
+		window.location.replace(DEV_EDITOR_LOCK_REDIRECT_PATH);
+	}, DEV_EDITOR_LOCK_REDIRECT_DELAY_MS);
+}
+
+function scheduleTypingCodeVerify() {
+	if (developerModeEnabled) return;
+	if (verifyingDeveloperCode) return;
+	cancelTypingCodeVerify();
+	const code = developerCodeInput.trim();
+	if (!code) {
+		lastMatchedCode = "";
+		return;
+	}
+	if (code.toLowerCase() === DEV_EDITOR_OFF_CODE) {
+		lastMatchedCode = "";
+		return;
+	}
+	typingVerifyTimer = setTimeout(() => {
+		typingVerifyTimer = null;
+		void verifyCodeWhileTyping(code);
+	}, 260);
+}
+
+async function verifyCodeWhileTyping(code: string) {
+	const token = ++typingVerifyToken;
+	try {
+		const devCodeHash = await hashDevCodeClient(code);
+		const response = await fetch("/api/dev/verify", {
+			method: "POST",
+			headers: {
+				Accept: "application/json",
+				"Content-Type": "application/json",
+			},
+			cache: "no-store",
+			body: JSON.stringify({
+				devCodeHash,
+			}),
+		});
+		if (token !== typingVerifyToken) return;
+		if (code !== developerCodeInput.trim()) return;
+		if (response.ok) {
+			if (lastMatchedCode !== code) {
+				lastMatchedCode = code;
+				showUnlockToast("暗号对啦，开写喵~");
+			}
+			return;
+		}
+		lastMatchedCode = "";
+	} catch {
+		// Ignore typing-stage verify errors to avoid noisy UI.
+	}
+}
+
+async function submitDeveloperCode() {
+	cancelTypingCodeVerify();
+	cancelLockRedirect();
+	const code = developerCodeInput.trim();
+	const normalizedCode = code.toLowerCase();
+	if (normalizedCode === DEV_EDITOR_OFF_CODE) {
+		const currentPath =
+			typeof window !== "undefined" ? window.location.pathname || "" : "";
+		const shouldLeaveProtectedPage = isProtectedDeveloperPage(currentPath);
+		setDeveloperModeEnabled(false, {
+			emitEvent: !shouldLeaveProtectedPage,
+		});
+		clearStoredDevCredential();
+		developerModeEnabled = false;
+		developerCodeInput = "";
+		lastMatchedCode = "";
+		const closeMessage = pickPlayfulMessage(
+			DEV_EDITOR_CLOSED_MESSAGES,
+			lastClosedToastMessage,
+		);
+		lastClosedToastMessage = closeMessage;
+		showUnlockToast(closeMessage);
+		redirectAfterDeveloperModeLocked();
+		return;
+	}
+	if (developerModeEnabled) {
+		developerCodeInput = "";
+		lastMatchedCode = "";
+		const unlockedMessage = pickPlayfulMessage(
+			DEV_EDITOR_UNLOCKED_MESSAGES,
+			lastUnlockedToastMessage,
+		);
+		lastUnlockedToastMessage = unlockedMessage;
+		showUnlockToast(unlockedMessage);
+		return;
+	}
+	if (!code) {
+		const emptyCodeMessage = pickPlayfulMessage(
+			DEV_EDITOR_EMPTY_CODE_MESSAGES,
+			lastEmptyCodeToastMessage,
+		);
+		lastEmptyCodeToastMessage = emptyCodeMessage;
+		showUnlockToast(emptyCodeMessage);
+		return;
+	}
+	if (verifyingDeveloperCode) return;
+	verifyingDeveloperCode = true;
+	try {
+		const devCodeHash = await hashDevCodeClient(code);
+		const response = await fetch("/api/dev/verify", {
+			method: "POST",
+			headers: {
+				Accept: "application/json",
+				"Content-Type": "application/json",
+			},
+			cache: "no-store",
+			body: JSON.stringify({
+				devCodeHash,
+			}),
+		});
+		const result = (await response.json().catch(() => ({}))) as {
+			ok?: boolean;
+			message?: string;
+		};
+		if (!response.ok || !result.ok) {
+			if (response.status === 403) {
+				throw new Error("DEV_WRONG_CODE");
+			}
+			if (response.status === 404) {
+				throw new Error("校验接口未部署，请先重新部署");
+			}
+			throw new Error(`校验失败(${response.status})，请稍后再试`);
+		}
+		storeDevCredential(devCodeHash);
+		developerModeEnabled = true;
+		setDeveloperModeEnabled(true);
+		developerCodeInput = "";
+		lastMatchedCode = code;
+		showUnlockToast("暗号对啦，开写喵~");
+		window.setTimeout(() => {
+			redirectToDeveloperEditor();
+		}, DEV_EDITOR_REDIRECT_DELAY_MS);
+	} catch (error) {
+		clearStoredDevCredential();
+		lastMatchedCode = "";
+		if (error instanceof Error && error.message === "DEV_WRONG_CODE") {
+			const wrongCodeMessage = pickPlayfulMessage(
+				DEV_EDITOR_WRONG_CODE_MESSAGES,
+				lastWrongCodeToastMessage,
+			);
+			lastWrongCodeToastMessage = wrongCodeMessage;
+			showUnlockToast(wrongCodeMessage);
+			return;
+		}
+		const message = error instanceof Error ? error.message : "口令不正确";
+		showUnlockToast(message);
+	} finally {
+		verifyingDeveloperCode = false;
+	}
+}
 
 function resetHue() {
 	hue = getDefaultHue();
@@ -60,9 +337,6 @@ $: setBackgroundDisabled(backgroundDisabled);
 $: setRainbowMode(rainbowMode);
 $: setRainMode(rainMode);
 $: setBackgroundBlur(backgroundBlur);
-$: if (!rainMode && rainPanelOpen) {
-	rainPanelOpen = false;
-}
 $: if (typeof document !== "undefined") {
 	document.body.classList.toggle("rain-config-open", rainPanelOpen);
 }
@@ -79,27 +353,46 @@ onMount(() => {
 			}
 		};
 	}
+	void migrateLegacyDevCodeToCredential();
 
 	const handleBackgroundChange = (event: Event) => {
 		const detail = (event as CustomEvent<{ index?: number }>).detail;
 		if (!detail || typeof detail.index !== "number") return;
 		backgroundIndex = normalizeBackgroundIndex(detail.index);
 	};
+	const handleDeveloperModeChange = (event: Event) => {
+		const enabled = (event as CustomEvent<boolean>).detail;
+		developerModeEnabled = Boolean(enabled);
+	};
 
 	window.addEventListener(
 		"background-selection-change",
 		handleBackgroundChange as EventListener,
 	);
+	window.addEventListener(
+		"developer-mode-change",
+		handleDeveloperModeChange as EventListener,
+	);
 	return () => {
 		if (typeof document !== "undefined") {
 			document.body.classList.remove("rain-config-open");
 		}
+		if (unlockToastTimeout) {
+			clearTimeout(unlockToastTimeout);
+			unlockToastTimeout = null;
+		}
+		cancelLockRedirect();
+		cancelTypingCodeVerify();
 		if (portalHost?.parentNode) {
 			portalHost.parentNode.removeChild(portalHost);
 		}
 		window.removeEventListener(
 			"background-selection-change",
 			handleBackgroundChange as EventListener,
+		);
+		window.removeEventListener(
+			"developer-mode-change",
+			handleDeveloperModeChange as EventListener,
 		);
 	};
 });
@@ -114,6 +407,19 @@ function getInitialBackgroundIndex(): number {
 		if (typeof win.__bgSelectionIndex === "number") {
 			return normalizeBackgroundIndex(win.__bgSelectionIndex);
 		}
+	}
+	for (let idx = 0; idx < BACKGROUND_OPTIONS.length; idx += 1) {
+		const candidate = BACKGROUND_OPTIONS[idx];
+		if (!candidate || candidate.type !== "image") {
+			continue;
+		}
+		if (
+			typeof candidate.src === "string" &&
+			candidate.src.startsWith("data:image/svg+xml")
+		) {
+			continue;
+		}
+		return idx;
 	}
 	return 0;
 }
@@ -184,9 +490,11 @@ $: if (speedSlider) updateRangeFill(speedSlider, rainConfig.speed);
 $: if (angleSlider) updateRangeFill(angleSlider, rainConfig.angle);
 $: currentBackground = BACKGROUND_OPTIONS[backgroundIndex] ?? null;
 $: backgroundTypeLabel = currentBackground
-	? currentBackground.type === "video"
-		? "视频"
-		: "图片"
+	? currentBackground.label
+		? currentBackground.label
+		: currentBackground.type === "video"
+			? "视频"
+			: "图片"
 	: "--";
 </script>
 
@@ -262,7 +570,7 @@ $: backgroundTypeLabel = currentBackground
                 before:w-1 before:h-4 before:rounded-md before:bg-[var(--primary)]
                 before:absolute before:-left-3 before:top-[0.33rem]">
                 要下雨吗
-                <button type="button" class="btn-plain w-6 h-6 rounded-md" aria-label="Rain Effect Settings" on:click={() => { if (!rainMode) rainMode = true; rainPanelOpen = true; }}>
+                <button type="button" class="btn-plain w-6 h-6 rounded-md" aria-label="Rain Effect Settings" on:click={() => { rainPanelOpen = true; }}>
                     <svg viewBox="0 0 24 24" aria-hidden="true" class="w-4 h-4">
                         <path fill="currentColor" d="M19.14,12.94c0.04-0.31,0.06-0.63,0.06-0.94s-0.02-0.63-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.11-0.2-0.36-0.28-0.57-0.22l-2.39,0.96c-0.5-0.38-1.04-0.7-1.64-0.94l-0.36-2.54C14.34,2.38,14.12,2.2,13.87,2.2h-3.74c-0.25,0-0.47,0.18-0.5,0.42l-0.36,2.54c-0.6,0.24-1.14,0.56-1.64,0.94l-2.39-0.96c-0.22-0.06-0.46,0.02-0.57,0.22L2.75,8.68c-0.11,0.2-0.06,0.47,0.12,0.61l2.03,1.58C4.86,11.17,4.84,11.49,4.84,11.8s0.02,0.63,0.06,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.11,0.2,0.36,0.28,0.57,0.22l2.39-0.96c0.5,0.38,1.04,0.7,1.64,0.94l0.36,2.54c0.03,0.24,0.25,0.42,0.5,0.42h3.74c0.25,0,0.47-0.18,0.5-0.42l0.36-2.54c0.6-0.24,1.14-0.56,1.64-0.94l2.39,0.96c0.22,0.06,0.46-0.02,0.57-0.22l1.92-3.32c0.11-0.2,0.06-0.47-0.12-0.61l-2.03-1.58ZM12,15.6c-1.99,0-3.6-1.61-3.6-3.6S10.01,8.4,12,8.4s3.6,1.61,3.6,3.6S13.99,15.6,12,15.6Z"/>
                     </svg>
@@ -330,9 +638,39 @@ $: backgroundTypeLabel = currentBackground
             </button>
         </div>
     </div>
+
+    <div class="mt-4">
+        <div class="flex items-center gap-2 mb-2">
+            <div class="font-bold text-sm text-neutral-900 dark:text-neutral-100 transition relative ml-3
+                before:w-1 before:h-3 before:rounded-md before:bg-[var(--primary)]
+                before:absolute before:-left-3 before:top-[0.2rem]">
+                开发者模式            </div>
+            <div class="text-[11px] text-neutral-400 dark:text-neutral-500 ml-auto">
+                小口令对上，就给你一支会发光的笔
+            </div>
+        </div>
+        <input
+            type="password"
+            class="w-full h-9 rounded-md bg-[var(--btn-regular-bg)] px-3 text-sm text-[var(--btn-content)] outline-none border border-transparent focus:border-[var(--primary)] transition"
+            placeholder={developerModeEnabled ? "已解锁，可继续写作" : "输入开发口令，按回车解锁"}
+            bind:value={developerCodeInput}
+            on:input={scheduleTypingCodeVerify}
+            on:keydown={(event) => {
+                if (event.key === "Enter") {
+                    void submitDeveloperCode();
+                }
+            }}
+        />
+    </div>
 </div>
 
 <div bind:this={portalHost}>
+    {#if unlockToastVisible}
+        <div class="dev-toast" transition:fly={{ y: 18, duration: 220 }}>
+            <div class="dev-toast-dot"></div>
+            <span>{unlockToastMessage}</span>
+        </div>
+    {/if}
     {#if rainPanelOpen}
         <div class="rain-config-overlay" on:click={() => rainPanelOpen = false} transition:fade={{ duration: 180, easing: cubicOut }}>
             <div class="rain-config-panel card-base" role="dialog" aria-modal="true" aria-label="Rain Effect Settings" on:click|stopPropagation
@@ -652,6 +990,30 @@ $: backgroundTypeLabel = currentBackground
         border-radius 0.375rem
         background var(--rain-accent-strong)
 
+    .dev-toast
+      position fixed
+      right 1.25rem
+      bottom 1.25rem
+      z-index 10000
+      display inline-flex
+      align-items center
+      gap 0.55rem
+      max-width min(92vw, 26rem)
+      padding 0.7rem 0.95rem
+      border-radius 0.8rem
+      border 1px solid var(--primary)
+      background var(--float-panel-bg)
+      color var(--btn-content)
+      box-shadow 0 10px 32px rgba(0, 0, 0, 0.32)
+      backdrop-filter blur(8px)
+
+    .dev-toast-dot
+      width 0.48rem
+      height 0.48rem
+      border-radius 999px
+      background var(--primary)
+      box-shadow 0 0 10px rgba(255, 255, 255, 0.35)
+
     @media (max-width: 640px), (hover: none) and (pointer: coarse)
       .rain-config-overlay
         align-items flex-start
@@ -687,3 +1049,4 @@ $: backgroundTypeLabel = currentBackground
           font-size 14px
 
 </style>
+

@@ -1,65 +1,48 @@
 <script lang="ts">
-import { onDestroy, onMount } from "svelte";
+import { onMount } from "svelte";
 import { cubicOut } from "svelte/easing";
 import { fade } from "svelte/transition";
 
-let isEnabled = true;
-let isDragging = false;
-let startX = 0;
-let startY = 0;
+let isEnabled = false;
 let offsetX = 0;
 let offsetY = 0;
-let showDragAnimation = false;
-let dragAnimationOffset = { x: 0, y: 0 };
 let currentDeviceKey = "";
+let controlHidden = false;
+let dodgeAttempts = 0;
+let controlPositionReady = false;
+let lanternToastVisible = false;
+let lanternToastMessage = "";
+let lanternToastTimeout: ReturnType<typeof setTimeout> | null = null;
+let lanternToastX = 14;
+let lanternToastY = 64;
 
 const MIN_VISIBLE_PIXELS = 32;
+const CONTROL_MARGIN_PX = 2;
+const LEGACY_CONTROL_MARGIN_PX = 10;
+const POSITION_DEFAULT_EPSILON_PX = 2;
+const LANTERN_ENABLED_KEY = "lanternEnabled";
+const LANTERN_CONTROL_HIDDEN_KEY = "lanternControlHidden";
+const LANTERN_DODGE_ATTEMPTS_KEY = "lanternDodgeAttempts";
+const LANTERN_POSITION_KEY_PREFIX = "lanternPositionV2";
+const MAX_DODGE_ATTEMPTS = 5;
+const TOAST_MIN_MARGIN_PX = 8;
+const TOAST_GAP_PX = 10;
+const TOAST_ESTIMATED_WIDTH = 220;
+const TOAST_ESTIMATED_HEIGHT = 42;
+const DODGE_TOAST_MESSAGES = [
+	"不要点啦",
+	"再戳我就躲远一点啦",
+	"你再点我就彻底消失啦",
+];
 
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, value));
 }
 
-function getToggleElements() {
-	const control = document.querySelector(".lantern-control") as HTMLElement | null;
-	const toggle = document.querySelector(
-		".lantern-toggle-container",
-	) as HTMLElement | null;
-	return { control, toggle };
+function randomBetween(min: number, max: number): number {
+	return min + Math.random() * (max - min);
 }
 
-function clampOffsetToViewport() {
-	if (typeof window === "undefined") return;
-	const { control, toggle } = getToggleElements();
-	if (!control || !toggle) return;
-
-	const toggleRect = toggle.getBoundingClientRect();
-	const toggleWidth = toggleRect.width || 140;
-	const toggleHeight = toggleRect.height || 44;
-	const controlStyle = window.getComputedStyle(control);
-	const right = Number.parseFloat(controlStyle.right) || 0;
-	const bottom = Number.parseFloat(controlStyle.bottom) || 0;
-
-	const baseLeft = window.innerWidth - right - toggleWidth;
-	const baseTop = window.innerHeight - bottom - toggleHeight;
-	const minLeft = -(toggleWidth - MIN_VISIBLE_PIXELS);
-	const maxLeft = window.innerWidth - MIN_VISIBLE_PIXELS;
-	const minTop = -(toggleHeight - MIN_VISIBLE_PIXELS);
-	const maxTop = window.innerHeight - MIN_VISIBLE_PIXELS;
-
-	const minOffsetX = minLeft - baseLeft;
-	const maxOffsetX = maxLeft - baseLeft;
-	const minOffsetY = minTop - baseTop;
-	const maxOffsetY = maxTop - baseTop;
-
-	offsetX = clamp(offsetX, minOffsetX, maxOffsetX);
-	offsetY = clamp(offsetY, minOffsetY, maxOffsetY);
-}
-
-// 触摸事件相关变量 - 用于检测双击
-let lastTapTime = 0;
-const DOUBLE_TAP_THRESHOLD = 300;
-
-// 检查localStorage是否可用
 function isLocalStorageAvailable() {
 	try {
 		return (
@@ -71,294 +54,291 @@ function isLocalStorageAvailable() {
 	}
 }
 
-// 检查是否是移动设备
 function isMobileDevice() {
 	return typeof window !== "undefined" && window.innerWidth <= 768;
 }
 
-// 获取设备类型的存储键
 function getDeviceStorageKey() {
 	const deviceKey = isMobileDevice() ? "mobile" : "desktop";
 	currentDeviceKey = deviceKey;
 	return deviceKey;
 }
 
-// 从localStorage加载状态
-function loadLanternState() {
-	if (isLocalStorageAvailable()) {
-		const savedState = localStorage.getItem("lanternEnabled");
-		if (savedState !== null) {
-			isEnabled = savedState === "true";
-		}
-	}
+function getToggleElements() {
+	const control = document.querySelector(
+		".lantern-control",
+	) as HTMLElement | null;
+	const toggle = document.querySelector(
+		".lantern-toggle-container",
+	) as HTMLElement | null;
+	return { control, toggle };
 }
 
-// 保存状态到localStorage
+function getToggleSize() {
+	const { toggle } = getToggleElements();
+	const rect = toggle?.getBoundingClientRect();
+	return {
+		width: rect?.width || 140,
+		height: rect?.height || 44,
+	};
+}
+
+function getMovementBounds() {
+	if (typeof window === "undefined") {
+		return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+	}
+	const { width, height } = getToggleSize();
+	return {
+		minX: -(width - MIN_VISIBLE_PIXELS),
+		maxX: window.innerWidth - MIN_VISIBLE_PIXELS,
+		minY: -(height - MIN_VISIBLE_PIXELS),
+		maxY: window.innerHeight - MIN_VISIBLE_PIXELS,
+	};
+}
+
+function getDefaultTogglePosition(marginPx = CONTROL_MARGIN_PX) {
+	if (typeof window === "undefined") return { x: 0, y: 0 };
+	const { width, height } = getToggleSize();
+	return {
+		x: window.innerWidth - marginPx - width,
+		y: window.innerHeight - marginPx - height,
+	};
+}
+
+function updateLanternToastPosition() {
+	if (typeof window === "undefined") return;
+	const toastEl = document.querySelector(".lantern-toast") as HTMLElement | null;
+	const toastWidth = toastEl?.offsetWidth || TOAST_ESTIMATED_WIDTH;
+	const toastHeight = toastEl?.offsetHeight || TOAST_ESTIMATED_HEIGHT;
+	const minX = TOAST_MIN_MARGIN_PX;
+	const maxX = window.innerWidth - toastWidth - TOAST_MIN_MARGIN_PX;
+	const minY = TOAST_MIN_MARGIN_PX;
+	const maxY = window.innerHeight - toastHeight - TOAST_MIN_MARGIN_PX;
+
+	const setToastPosition = (x: number, y: number) => {
+		lanternToastX = Math.round(clamp(x, minX, maxX));
+		lanternToastY = Math.round(clamp(y, minY, maxY));
+	};
+
+	const { width, height } = getToggleSize();
+	const rightTopX = offsetX + width + TOAST_GAP_PX;
+	const leftTopX = offsetX - toastWidth - TOAST_GAP_PX;
+	const canPlaceRight = rightTopX + toastWidth <= window.innerWidth - TOAST_MIN_MARGIN_PX;
+	const canPlaceLeft = leftTopX >= TOAST_MIN_MARGIN_PX;
+	let x = rightTopX;
+	if (!canPlaceRight && canPlaceLeft) {
+		x = leftTopX;
+	} else if (!canPlaceRight && !canPlaceLeft) {
+		x = offsetX + width / 2 - toastWidth / 2;
+	}
+	const y = offsetY - toastHeight - TOAST_GAP_PX;
+	setToastPosition(x, y);
+}
+
+function showLanternToast(message: string) {
+	lanternToastMessage = message;
+	lanternToastVisible = true;
+	updateLanternToastPosition();
+	requestAnimationFrame(() => {
+		updateLanternToastPosition();
+	});
+	if (lanternToastTimeout) {
+		clearTimeout(lanternToastTimeout);
+	}
+	lanternToastTimeout = setTimeout(() => {
+		lanternToastVisible = false;
+		lanternToastTimeout = null;
+	}, 1300);
+}
+
 function saveLanternState() {
-	if (isLocalStorageAvailable()) {
-		localStorage.setItem("lanternEnabled", isEnabled.toString());
-	}
+	if (!isLocalStorageAvailable()) return;
+	localStorage.setItem(LANTERN_ENABLED_KEY, isEnabled.toString());
 }
 
-// 从localStorage加载位置
-function loadLanternPosition() {
-	if (isLocalStorageAvailable()) {
-		const deviceKey = getDeviceStorageKey();
-		const savedPosition = localStorage.getItem(`lanternPosition_${deviceKey}`);
-		if (savedPosition !== null) {
-			try {
-				const position = JSON.parse(savedPosition);
-				const x = Number(position?.x);
-				const y = Number(position?.y);
-				offsetX = Number.isFinite(x) ? x : 0;
-				offsetY = Number.isFinite(y) ? y : 0;
-			} catch {
-				// 解析失败，使用默认值
-				offsetX = 0;
-				offsetY = 0;
-			}
-		}
-	}
-}
-
-// 保存位置到localStorage
-function saveLanternPosition() {
-	if (isLocalStorageAvailable()) {
-		const deviceKey = getDeviceStorageKey();
-		localStorage.setItem(
-			`lanternPosition_${deviceKey}`,
-			JSON.stringify({ x: offsetX, y: offsetY }),
-		);
-	}
-}
-
-// 切换灯笼状态
-function toggleLantern() {
-	isEnabled = !isEnabled;
-	saveLanternState();
-}
-
-// 开始拖动
-function startDrag(event: MouseEvent | TouchEvent) {
-	// 检测双击事件
-	if (event instanceof TouchEvent) {
-		const currentTime = Date.now();
-		const tapLength = currentTime - lastTapTime;
-
-		// 检查是否是双击（时间间隔小于阈值）
-		if (tapLength < DOUBLE_TAP_THRESHOLD && tapLength > 0) {
-			// 触发双击处理
-			handleDoubleClick();
-			// 阻止默认行为，防止拖动
-			event.preventDefault();
-			return;
-		}
-
-		// 记录本次点击时间
-		lastTapTime = currentTime;
-	}
-
-	isDragging = true;
-
-	// 隐藏拖动动画
-	showDragAnimation = false;
-
-	// 计算初始位置
-	if (event instanceof MouseEvent) {
-		startX = event.clientX - offsetX;
-		startY = event.clientY - offsetY;
-		// 阻止默认行为，提高拖动灵敏度
-		event.preventDefault();
-	} else {
-		startX = event.touches[0].clientX - offsetX;
-		startY = event.touches[0].clientY - offsetY;
-		// 阻止默认行为，防止页面滚动
-		event.preventDefault();
-	}
-}
-
-// 拖动中
-function drag(event: MouseEvent | TouchEvent) {
-	if (!isDragging) return;
-
-	// 阻止默认行为，防止页面滚动
-	if (event instanceof MouseEvent) {
-		event.preventDefault();
-		offsetX = event.clientX - startX;
-		offsetY = event.clientY - startY;
-	} else {
-		event.preventDefault();
-		offsetX = event.touches[0].clientX - startX;
-		offsetY = event.touches[0].clientY - startY;
-	}
-}
-
-// 添加触摸事件处理，防止页面滚动
-function preventScroll(event: TouchEvent) {
-	if (isDragging) {
-		event.preventDefault();
-	}
-}
-
-// 结束拖动
-function endDrag() {
-	isDragging = false;
-	clampOffsetToViewport();
-	saveLanternPosition();
-}
-
-// 双击事件处理 - 重置按钮位置并打开灯笼
-function handleDoubleClick() {
-	// 打开灯笼
-	isEnabled = true;
-	saveLanternState();
-
-	// 实现回弹动画效果
-	// 1. 先稍微超过目标位置
-	const bounceOffsetX = -5;
-	const bounceOffsetY = -5;
-
-	// 2. 快速设置到回弹位置
-	offsetX = bounceOffsetX;
-	offsetY = bounceOffsetY;
-
-	// 3. 强制浏览器重排
-	void (document.querySelector(".lantern-toggle-container") as HTMLElement)
-		?.offsetWidth;
-
-	// 4. 动画回到准确位置
-	setTimeout(() => {
-		offsetX = 0;
-		offsetY = 0;
-		saveLanternPosition();
-	}, 50);
-}
-
-// 处理窗口大小变化
-function handleResize() {
-	// 检查设备类型是否发生变化
-	const newDeviceKey = isMobileDevice() ? "mobile" : "desktop";
-	if (newDeviceKey !== currentDeviceKey) {
-		// 设备类型发生变化，重新加载对应设备的位置
-		currentDeviceKey = newDeviceKey;
-		loadLanternPosition();
-		requestAnimationFrame(() => {
-			clampOffsetToViewport();
-			saveLanternPosition();
-		});
+function loadLanternState() {
+	if (!isLocalStorageAvailable()) return;
+	const savedState = localStorage.getItem(LANTERN_ENABLED_KEY);
+	if (savedState !== null) {
+		isEnabled = savedState === "true";
 		return;
 	}
+	// 默认关闭
+	isEnabled = false;
+}
+
+function saveControlState() {
+	if (!isLocalStorageAvailable()) return;
+	localStorage.setItem(
+		LANTERN_CONTROL_HIDDEN_KEY,
+		controlHidden ? "true" : "false",
+	);
+	localStorage.setItem(LANTERN_DODGE_ATTEMPTS_KEY, String(dodgeAttempts));
+}
+
+function loadControlState() {
+	if (!isLocalStorageAvailable()) return;
+	controlHidden = localStorage.getItem(LANTERN_CONTROL_HIDDEN_KEY) === "true";
+	const raw = localStorage.getItem(LANTERN_DODGE_ATTEMPTS_KEY);
+	const parsed = raw ? Number.parseInt(raw, 10) : 0;
+	dodgeAttempts = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+function loadLanternPosition() {
+	const defaults = getDefaultTogglePosition();
+	if (!isLocalStorageAvailable()) {
+		offsetX = defaults.x;
+		offsetY = defaults.y;
+		return;
+	}
+	const deviceKey = getDeviceStorageKey();
+	const savedPosition = localStorage.getItem(
+		`${LANTERN_POSITION_KEY_PREFIX}_${deviceKey}`,
+	);
+	if (savedPosition === null) {
+		offsetX = defaults.x;
+		offsetY = defaults.y;
+		return;
+	}
+	try {
+		const position = JSON.parse(savedPosition);
+		const x = Number(position?.x);
+		const y = Number(position?.y);
+		if (!Number.isFinite(x) || !Number.isFinite(y)) {
+			offsetX = defaults.x;
+			offsetY = defaults.y;
+			return;
+		}
+		const legacyDefaults = getDefaultTogglePosition(LEGACY_CONTROL_MARGIN_PX);
+		const wasLegacyDefault =
+			Math.abs(x - legacyDefaults.x) <= POSITION_DEFAULT_EPSILON_PX &&
+			Math.abs(y - legacyDefaults.y) <= POSITION_DEFAULT_EPSILON_PX;
+		if (wasLegacyDefault) {
+			offsetX = defaults.x;
+			offsetY = defaults.y;
+			return;
+		}
+		offsetX = x;
+		offsetY = y;
+	} catch {
+		offsetX = defaults.x;
+		offsetY = defaults.y;
+	}
+}
+
+function saveLanternPosition() {
+	if (!isLocalStorageAvailable()) return;
+	const deviceKey = getDeviceStorageKey();
+	localStorage.setItem(
+		`${LANTERN_POSITION_KEY_PREFIX}_${deviceKey}`,
+		JSON.stringify({ x: offsetX, y: offsetY }),
+	);
+}
+
+function clampOffsetToViewport() {
+	if (typeof window === "undefined") return;
+	const { minX, maxX, minY, maxY } = getMovementBounds();
+	offsetX = clamp(offsetX, minX, maxX);
+	offsetY = clamp(offsetY, minY, maxY);
+}
+
+function dodgeToggleFromPoint() {
+	if (typeof window === "undefined") return;
+	const { minX, maxX, minY, maxY } = getMovementBounds();
+	const minJumpDistance = isMobileDevice() ? 180 : 240;
+	let targetX = offsetX;
+	let targetY = offsetY;
+
+	for (let i = 0; i < 8; i += 1) {
+		const candidateX = randomBetween(minX, maxX);
+		const candidateY = randomBetween(minY, maxY);
+		const jumpDistance = Math.hypot(candidateX - offsetX, candidateY - offsetY);
+		targetX = candidateX;
+		targetY = candidateY;
+		if (jumpDistance >= minJumpDistance) {
+			break;
+		}
+	}
+
+	offsetX = targetX;
+	offsetY = targetY;
 	clampOffsetToViewport();
 	saveLanternPosition();
 }
 
-// 组件挂载时加载状态
+function hideControlPermanently() {
+	controlHidden = true;
+	isEnabled = false;
+	saveLanternState();
+	saveControlState();
+}
+
+function handleToggleAttempt() {
+	if (controlHidden) return;
+	dodgeAttempts += 1;
+	const message =
+		DODGE_TOAST_MESSAGES[(dodgeAttempts - 1) % DODGE_TOAST_MESSAGES.length];
+
+	if (dodgeAttempts >= MAX_DODGE_ATTEMPTS) {
+		hideControlPermanently();
+		showLanternToast("不陪你玩啦 我先藏好啦");
+		return;
+	}
+
+	dodgeToggleFromPoint();
+	saveControlState();
+	showLanternToast(message);
+}
+
+function handleToggleMouseDown() {
+	handleToggleAttempt();
+}
+
+function handleToggleTouchStart() {
+	handleToggleAttempt();
+}
+
+function handleResize() {
+	const newDeviceKey = isMobileDevice() ? "mobile" : "desktop";
+	if (newDeviceKey !== currentDeviceKey) {
+		currentDeviceKey = newDeviceKey;
+		loadLanternPosition();
+	}
+	clampOffsetToViewport();
+	saveLanternPosition();
+	if (lanternToastVisible) {
+		updateLanternToastPosition();
+	}
+}
+
 onMount(() => {
 	loadLanternState();
-	// 初始化设备类型
+	loadControlState();
+
+	if (controlHidden) {
+		// 按需求：消失后不恢复，同时灯笼保持关闭
+		isEnabled = false;
+		saveLanternState();
+	}
+
 	currentDeviceKey = getDeviceStorageKey();
 	loadLanternPosition();
+	clampOffsetToViewport();
+	controlPositionReady = true;
+
 	requestAnimationFrame(() => {
 		clampOffsetToViewport();
 		saveLanternPosition();
 	});
 
-	// 添加窗口大小变化监听
 	window.addEventListener("resize", handleResize);
 
-	// 检查是否是第一次打开网页
-	function isFirstVisit() {
-		// 暂时总是返回true，方便测试动画
-		return true;
-		/*
-		if (!isLocalStorageAvailable()) return true;
-		const hasVisited = localStorage.getItem("lanternAnimationShown");
-		return !hasVisited;
-		*/
-	}
-
-	// 标记动画已显示
-	function markAnimationShown() {
-		// 暂时注释掉，方便测试动画
-		/*
-		if (isLocalStorageAvailable()) {
-			localStorage.setItem("lanternAnimationShown", "true");
-		}
-		*/
-	}
-
-	// 在所有设备上显示拖动动画（方便测试）
-	if (isFirstVisit()) {
-		showDragAnimation = true;
-
-		// 开始拖动动画 - 只左右移动，先快后慢
-		const directions = [
-			{ x: 10, y: 0 },
-			{ x: -10, y: 0 },
-		];
-		let currentDirection = 0;
-		let animationCount = 0;
-		const maxAnimations = 6; // 动画次数
-		let currentSpeed = 100; // 初始动画速度（毫秒）
-		const speedIncrease = 25; // 每次动画增加的速度（毫秒）
-
-		// 使用递归函数实现可变速度的动画
-		function animate() {
-			if (showDragAnimation && animationCount < maxAnimations) {
-				dragAnimationOffset = directions[currentDirection];
-				currentDirection = (currentDirection + 1) % directions.length;
-				animationCount++;
-
-				// 增加动画间隔，实现先快后慢的效果
-				currentSpeed += speedIncrease;
-
-				// 安排下一次动画
-				setTimeout(animate, currentSpeed);
-			} else {
-				// 停止动画，恢复原位置
-				dragAnimationOffset = { x: 0, y: 0 };
-				showDragAnimation = false;
-				markAnimationShown();
-			}
-		}
-
-		// 开始动画
-		animate();
-
-		// 添加全局鼠标事件监听
-		window.addEventListener("mousemove", drag);
-		window.addEventListener("mouseup", endDrag);
-		window.addEventListener("mouseleave", endDrag);
-		window.addEventListener("touchmove", preventScroll, { passive: false });
-		window.addEventListener("touchmove", drag, { passive: false });
-		window.addEventListener("touchend", endDrag);
-
-		return () => {
-			window.removeEventListener("mousemove", drag);
-			window.removeEventListener("mouseup", endDrag);
-			window.removeEventListener("mouseleave", endDrag);
-			window.removeEventListener("touchmove", preventScroll);
-			window.removeEventListener("touchmove", drag);
-			window.removeEventListener("touchend", endDrag);
-			window.removeEventListener("resize", handleResize);
-		};
-	}
-	// 在桌面设备上添加全局鼠标事件监听
-	window.addEventListener("mousemove", drag);
-	window.addEventListener("mouseup", endDrag);
-	window.addEventListener("mouseleave", endDrag);
-	window.addEventListener("touchmove", preventScroll, { passive: false });
-	window.addEventListener("touchmove", drag, { passive: false });
-	window.addEventListener("touchend", endDrag);
-
 	return () => {
-		window.removeEventListener("mousemove", drag);
-		window.removeEventListener("mouseup", endDrag);
-		window.removeEventListener("mouseleave", endDrag);
-		window.removeEventListener("touchmove", preventScroll);
-		window.removeEventListener("touchmove", drag);
-		window.removeEventListener("touchend", endDrag);
 		window.removeEventListener("resize", handleResize);
+		if (lanternToastTimeout) {
+			clearTimeout(lanternToastTimeout);
+			lanternToastTimeout = null;
+		}
 	};
 });
 </script>
@@ -414,27 +394,38 @@ onMount(() => {
 	</div>
 {/if}
 
-<!-- 控制开关 -->
-<div class="lantern-control">
-	<div 
-		class="lantern-toggle-container"
-		onmousedown={startDrag}
-		ontouchstart={startDrag}
-		ondblclick={handleDoubleClick}
-		style={`transform: translate(${offsetX + (showDragAnimation ? dragAnimationOffset.x : 0)}px, ${offsetY + (showDragAnimation ? dragAnimationOffset.y : 0)}px); cursor: ${isDragging ? 'grabbing' : 'grab'}`}
-		tabindex="0"
-		role="button"
-		aria-label="拖拽灯笼控制开关，双击重置位置并打开灯笼"
-	>
-		<button 
-			class="lantern-toggle" 
-			onclick={toggleLantern}
-			aria-label={isEnabled ? '关闭灯笼' : '打开灯笼'}
+{#if !controlHidden && controlPositionReady}
+	<!-- 控制开关 -->
+	<div class="lantern-control">
+		<div
+			class="lantern-toggle-container"
+			style={`transform: translate(${offsetX}px, ${offsetY}px);`}
+			tabindex="0"
+			role="button"
+			aria-label="灯笼控制按钮 会躲开点击"
 		>
-			{isEnabled ? '🧨 关闭灯笼' : '🏮 打开灯笼'}
-		</button>
+			<button
+				type="button"
+				class="lantern-toggle"
+				on:mousedown|preventDefault|stopPropagation={handleToggleMouseDown}
+				on:touchstart|preventDefault|stopPropagation={handleToggleTouchStart}
+				aria-label="别点我 我会躲开"
+			>
+				🏮 灯笼已关
+			</button>
+		</div>
 	</div>
-</div>
+{/if}
+
+{#if lanternToastVisible}
+	<div
+		class="lantern-toast"
+		style={`left: ${lanternToastX}px; top: ${lanternToastY}px;`}
+		transition:fade={{ duration: 180, easing: cubicOut }}
+	>
+		{lanternToastMessage}
+	</div>
+{/if}
 
 <style lang="css">
 	/* 容器定位 */
@@ -558,15 +549,34 @@ onMount(() => {
 	/* 控制开关样式 */
 	.lantern-control {
 		position: fixed;
-		bottom: 10px;
-		right: 10px;
+		top: 0;
+		left: 0;
 		z-index: 10000;
-		pointer-events: auto;
+		pointer-events: none;
 	}
 	
 	.lantern-toggle-container {
 		position: relative;
+		pointer-events: auto;
 		transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+	}
+
+	.lantern-toast {
+		position: fixed;
+		left: 14px;
+		top: 64px;
+		z-index: 10001;
+		max-width: min(70vw, 18rem);
+		padding: 0.55rem 0.75rem;
+		border-radius: 0.65rem;
+		border: 1px solid rgba(255, 202, 40, 0.85);
+		background: rgba(34, 24, 16, 0.92);
+		color: #ffe4ad;
+		font-size: 0.84rem;
+		font-weight: 700;
+		line-height: 1.2;
+		box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+		pointer-events: none;
 	}
 	
 	.lantern-toggle {
@@ -658,14 +668,19 @@ onMount(() => {
 		}
 
 		.lantern-control {
-			bottom: 6px;
-			right: 6px;
+			top: 0;
+			left: 0;
 		}
 
 		.lantern-toggle {
 			padding: 10px 18px;
 			font-size: 14px;
 			border-radius: 20px;
+		}
+
+		.lantern-toast {
+			max-width: min(80vw, 16rem);
+			font-size: 0.8rem;
 		}
 	}
 </style>
