@@ -29,9 +29,11 @@ interface Props {
 	description?: string;
 	lang?: string;
 	setOGTypeArticle?: boolean;
+	pageType?: string;
 }
 
-let { title, banner, description, lang, setOGTypeArticle } = Astro.props;
+let { title, banner, description, lang, setOGTypeArticle, pageType } =
+	Astro.props;
 
 // apply a class to the body element to decide the height of the banner, only used for initial page load
 // Swup can update the body for each page visit, but it's after the page transition, causing a delay for banner height change
@@ -712,10 +714,11 @@ const bannerOffset =
 		<slot name="head"></slot>
 
 		<link rel="alternate" type="application/rss+xml" title={profileConfig.name} href={`${Astro.site}rss.xml`}/>
-		<link rel="stylesheet" href={url("/live2d-widget/waifu.css")} />
+		<link rel="stylesheet" href={url("/live2d-widget/waifu.css?v=20260313-1")} />
 
 	</head>
 	<body class=" min-h-screen transition " class:list={[{"lg:is-home": isHomePage, "enable-banner": enableBanner}]}
+		data-page-type={pageType}
 		data-overlayscrollbars-initialize
 	>
 
@@ -731,6 +734,8 @@ const bannerOffset =
 		<script>
 			// live2d_path 模型资源路径
 			const live2d_path = "/live2d-widget/";
+			const live2d_asset_version = "20260313-1";
+			const live2d_asset = (path: string) => `${live2d_path}${path}?v=${live2d_asset_version}`;
 
 			// 加载外部资源的方法
 			function loadExternalResource(url, type) {
@@ -811,19 +816,19 @@ const bannerOffset =
 			// 加载 live2d.min.js waifu-tips.js（waifu.css 走静态 <head> 链接）
 			if (screen.width >= 768) {
 				Promise.all([
-					loadExternalResource(live2d_path + "live2d.min.js", "js"),
-					loadExternalResource(live2d_path + "waifu-tips.js", "js")
+					loadExternalResource(live2d_asset("live2d.min.js"), "js"),
+					loadExternalResource(live2d_asset("waifu-tips.js"), "js")
 				]).then(async () => {
 					await normalizeLive2DModelSelection(
-						live2d_path + "model/model_list.json"
+						live2d_asset("model/model_list.json")
 					);
 					// 初始化 Live2D 模型，具体配置见 README.md
 					initWidget({
 						isLocalModel: true, // 使用本地模型
-						waifuPath: live2d_path + "waifu-tips.json",
+						waifuPath: live2d_asset("waifu-tips.json"),
 						modelsPath: live2d_path + "model",
-						modelListPath: live2d_path + "model/model_list.json",
-						tools: ["hitokoto", "asteroids", "switch-model", "switch-texture", "photo", "info", "quit"]
+						modelListPath: live2d_asset("model/model_list.json"),
+						tools: ["hitokoto", "asteroids", "switch-model", "switch-texture", "photo", "info", "mute", "quit"]
 					});
 
                     const initWaifuInteractions = () => {
@@ -839,6 +844,8 @@ const bannerOffset =
 
 	                        const waifuToolElement = document.getElementById("waifu-tool");
 	                        const waifuPositionStorageKey = "waifu-position";
+	                        const toolbarPlacementStorageKey = "waifu-toolbar-placement";
+	                        const waifuMuteStorageKey = "waifu-muted";
 	                        const tapResetMaxDelayMs = 360;
 	                        const tapResetMaxDistancePx = 30;
 	                        const tapResetMaxMovementPx = 10;
@@ -848,7 +855,7 @@ const bannerOffset =
 	                            "归位完成，我在左下角等你。",
 	                            "已回到左下角，随时听候召唤~"
 	                        ];
-	                        const randomPick = (messages) =>
+	                        const randomPick = (messages: string[]) =>
 	                            messages[Math.floor(Math.random() * messages.length)];
 	                        const readStoredPosition = () => {
 	                            try {
@@ -872,7 +879,7 @@ const bannerOffset =
 	                            }
 	                            return null;
 	                        };
-	                        const writeStoredPosition = (left, bottom) => {
+	                        const writeStoredPosition = (left: number, bottom: number) => {
 	                            try {
 	                                localStorage.setItem(
 	                                    waifuPositionStorageKey,
@@ -882,11 +889,60 @@ const bannerOffset =
 	                                console.warn("Failed to persist waifu position.", error);
 	                            }
 	                        };
-	                        let waifuTipTimer = 0;
-	                        const showWaifuMessage = (text, duration = 2400) => {
+	                        const readStoredToolbarPlacement = () => {
+	                            try {
+	                                return localStorage.getItem(toolbarPlacementStorageKey) === "right"
+	                                    ? "right"
+	                                    : "bottom";
+	                            } catch (error) {
+	                                console.warn("Failed to read waifu toolbar placement.", error);
+	                                return "bottom";
+	                            }
+	                        };
+	                        const writeStoredToolbarPlacement = (placement: "bottom" | "right") => {
+	                            try {
+	                                localStorage.setItem(
+	                                    toolbarPlacementStorageKey,
+	                                    placement === "right" ? "right" : "bottom"
+	                                );
+	                            } catch (error) {
+	                                console.warn("Failed to persist waifu toolbar placement.", error);
+	                            }
+	                        };
+	                        const isWaifuMuted = () => {
+	                            try {
+	                                return localStorage.getItem(waifuMuteStorageKey) === "1";
+	                            } catch (error) {
+	                                console.warn("Failed to read waifu mute state.", error);
+	                                return false;
+	                            }
+	                        };
+	                        let waifuTipTimer: ReturnType<typeof window.setTimeout> | 0 = 0;
+	                        const hideWaifuMessage = () => {
 	                            const tipsElement = document.getElementById("waifu-tips");
 	                            if (!tipsElement) {
 	                                return;
+	                            }
+	                            if (waifuTipTimer) {
+	                                clearTimeout(waifuTipTimer);
+	                                waifuTipTimer = 0;
+	                            }
+	                            tipsElement.classList.remove("waifu-tips-active");
+	                        };
+	                        const showWaifuMessage = (
+	                            text: string,
+	                            duration = 2400,
+	                            options: {
+	                                force?: boolean;
+	                            } = {}
+	                        ) => {
+	                            const { force = false } = options;
+	                            if (!text || (isWaifuMuted() && !force)) {
+	                                return false;
+	                            }
+	                            const tipsElement = document.getElementById("waifu-tips");
+	                            if (!tipsElement) {
+	                                return false;
 	                            }
 	                            if (waifuTipTimer) {
 	                                clearTimeout(waifuTipTimer);
@@ -898,7 +954,9 @@ const bannerOffset =
 	                                tipsElement.classList.remove("waifu-tips-active");
 	                                waifuTipTimer = 0;
 	                            }, duration);
+	                            return true;
 	                        };
+	                        window.addEventListener("waifu:mutechange", hideWaifuMessage);
 	                        const updateToolbarSide = () => {
 	                            if (!waifuToolElement) {
 	                                return;
@@ -968,7 +1026,13 @@ const bannerOffset =
 	                        };
 
 	                        const toolbarToggleButtonId = "waifu-tool-placement";
-                        const setToolbarPlacement = (placement) => {
+                        const setToolbarPlacement = (
+                            placement: "bottom" | "right",
+                            options: {
+                                persist?: boolean;
+                            } = {}
+                        ) => {
+                            const { persist = true } = options;
                             if (!waifuToolElement) {
                                 return;
                             }
@@ -979,6 +1043,9 @@ const bannerOffset =
                                 updateToolbarSide();
                             } else {
                                 waifuToolElement.dataset.side = "right";
+                            }
+                            if (persist) {
+                                writeStoredToolbarPlacement(normalizedPlacement);
                             }
                         };
                         const toggleToolbarPlacement = () => {
@@ -999,7 +1066,7 @@ const bannerOffset =
                             }
                             const quitButton = document.getElementById("waifu-tool-quit");
                             const buttonHtml =
-                                `<span id="${toolbarToggleButtonId}" title="Switch Toolbar Position">&#10565;</span>`;
+                                `<span id="${toolbarToggleButtonId}">&#10565;</span>`;
                             if (quitButton) {
                                 quitButton.insertAdjacentHTML("beforebegin", buttonHtml);
                             } else {
@@ -1015,7 +1082,7 @@ const bannerOffset =
                             }
                         };
 	                        mountToolbarToggleButton();
-	                        setToolbarPlacement("bottom");
+	                        setToolbarPlacement(readStoredToolbarPlacement(), { persist: false });
 
 	                        const clearMotionFrames = () => {
                             if (dragState.glideRafId) {
@@ -1361,11 +1428,19 @@ const bannerOffset =
                         let lastX = 0;
                         let headPatCount = 0;
                         const headPatMessages = [
-                            "\u54ce\u5440\uff0c\u522b\u4e00\u76f4\u6478\u6211\u5934\u5566~",
-                            "\u552f\u5531~\u6709\u70b9\u75d2\u5462",
-                            "\u54ce\uff0c\u624b\u4e0b\u7559\u60c5\uff01",
-                            "\u518d\u6478\u4e00\u4e0b\u4e5f\u4e0d\u662f\u4e0d\u884c...",
-                            "\u4eca\u5929\u5fc3\u60c5\u4e0d\u9519\uff0c\u5141\u8bb8\u4f60\u6478\u6478\u5934"
+                            "欸，突然摸头干嘛呀？",
+                            "好啦好啦，别一直摸嘛。",
+                            "有点痒，你轻一点。",
+                            "住手住手，我发型要乱了！",
+                            "讨厌，你怎么又来逗我。",
+                            "摸头之前至少先说一声嘛。",
+                            "唔……这样好像还挺舒服的。",
+                            "坏蛋，就知道趁机欺负我。",
+                            "别闹啦，我都快不好意思了。",
+                            "其实……再摸一下也不是不行。",
+                            "嗯哼，再来一点点？",
+                            "好了啦，差不多可以停了。",
+                            "喂，不许趁机乱碰。"
                         ];
 
                         live2dElement.addEventListener("mousemove", (e) => {
@@ -1391,16 +1466,16 @@ const bannerOffset =
                                         const randomMessage = headPatMessages[
                                             Math.floor(Math.random() * headPatMessages.length)
                                         ];
-                                        const tipsElement = document.getElementById("waifu-tips");
-                                        if (tipsElement) {
-                                            tipsElement.innerHTML = randomMessage;
-                                            tipsElement.classList.add("waifu-tips-active");
-                                            setTimeout(() => {
-                                                tipsElement.classList.remove("waifu-tips-active");
-                                                headPatting = false;
-                                                headPatCount = 0;
-                                            }, 2000);
+                                        const didShowMessage = showWaifuMessage(randomMessage, 2000);
+                                        if (!didShowMessage) {
+                                            headPatting = false;
+                                            headPatCount = 0;
+                                            return;
                                         }
+                                        setTimeout(() => {
+                                            headPatting = false;
+                                            headPatCount = 0;
+                                        }, 2000);
                                     }
                                 }
                             }
@@ -1527,17 +1602,33 @@ function disableAnimation() {
 const bannerEnabled = !!document.getElementById('banner-wrapper')
 
 function setClickOutsideToClose(panel: string, ignores: string[]) {
+	const isIgnoredTarget = (target: Node | null) => {
+		if (!(target instanceof Node)) return false;
+		for (let ig of ignores) {
+			let ie = document.getElementById(ig);
+			if (ie == target || ie?.contains(target)) {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	let pointerStartedInside = false;
+
+	document.addEventListener("pointerdown", event => {
+		pointerStartedInside = isIgnoredTarget(event.target);
+	});
+
 	document.addEventListener("click", event => {
 		let panelDom = document.getElementById(panel);
 		let tDom = event.target;
-		if (!(tDom instanceof Node)) return;		// Ensure the event target is an HTML Node
-		for (let ig of ignores) {
-			let ie = document.getElementById(ig)
-			if (ie == tDom || (ie?.contains(tDom))) {
-				return;
-			}
+		if (!(tDom instanceof Node)) return;
+		if (isIgnoredTarget(tDom) || pointerStartedInside) {
+			pointerStartedInside = false;
+			return;
 		}
-		panelDom!.classList.add("float-panel-closed");
+		pointerStartedInside = false;
+		panelDom?.classList.add("float-panel-closed");
 	});
 }
 setClickOutsideToClose("display-setting", ["display-setting", "display-settings-switch"])

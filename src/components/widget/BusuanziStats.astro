@@ -4,7 +4,7 @@ import { url } from "@utils/url-utils";
 const isPostsRoute = Astro.url.pathname.startsWith(url("/posts/"));
 ---
 {isPostsRoute && (
-	<section id="busuanzi-stats-card" class="card-base mt-4 p-4 transition-swup-fade onload-animation">
+	<section id="busuanzi-stats-card" class="site-state card-base mt-4 p-4 transition-swup-fade onload-animation">
 		<div
 			class="font-bold transition text-lg text-neutral-900 dark:text-neutral-100 relative ml-8 mb-3
         before:w-1 before:h-4 before:rounded-md before:bg-[var(--primary)]

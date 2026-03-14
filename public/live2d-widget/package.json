@@ -5,7 +5,7 @@
   "main": "autoload.js",
   "type": "module",
   "scripts": {
-    "build": "rollup -c rollup.config.js -f iife | terser -c -m > waifu-tips.js",
+    "build": "node scripts/build.mjs",
     "build-dev": "rollup -c rollup.config.js -f iife -o waifu-tips.js -w"
   },
   "repository": {

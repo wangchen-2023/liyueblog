@@ -1,6 +1,7 @@
 ---
 import path from "node:path";
 import Twikoo from "@components/comment/Twikoo.astro";
+import DevDeletePostButton from "@components/editor/DevDeletePostButton.svelte";
 import License from "@components/misc/License.astro";
 import Markdown from "@components/misc/Markdown.astro";
 import I18nKey from "@i18n/i18nKey";
@@ -93,6 +94,14 @@ const jsonLd = {
                         tags={entry.data.tags}
                         category={entry.data.category}
                 ></PostMetadata>
+                <div class="mb-5 flex justify-end">
+                    <DevDeletePostButton
+                            client:only="svelte"
+                            title={entry.data.title}
+                            postId={entry.id}
+                            afterSuccess="home"
+                    />
+                </div>
                 {!entry.data.image && <div class="border-[var(--line-divider)] border-dashed border-b-[1px] mb-5"></div>}
             </div>
 
@@ -122,7 +131,8 @@ const jsonLd = {
 
     <div class="flex flex-col md:flex-row justify-between mb-4 gap-4 overflow-hidden w-full">
         <a href={entry.data.nextSlug ? getPostUrlBySlug(entry.data.nextSlug) : "#"}
-           class:list={["w-full font-bold overflow-hidden active:scale-95", {"pointer-events-none": !entry.data.nextSlug}]}>
+           rel={entry.data.nextSlug ? "next" : null}
+           class:list={["post-nav-item w-full font-bold overflow-hidden active:scale-95", {"pointer-events-none": !entry.data.nextSlug}]}>
             {entry.data.nextSlug && <div class="btn-card rounded-2xl w-full h-[3.75rem] max-w-full px-4 flex items-center !justify-start gap-4" >
                 <Icon name="material-symbols:chevron-left-rounded" class="text-[2rem] text-[var(--primary)]" />
                 <div class="overflow-hidden transition overflow-ellipsis whitespace-nowrap max-w-[calc(100%_-_3rem)] text-black/75 dark:text-white/75">
@@ -132,7 +142,8 @@ const jsonLd = {
         </a>
 
         <a href={entry.data.prevSlug ? getPostUrlBySlug(entry.data.prevSlug) : "#"}
-           class:list={["w-full font-bold overflow-hidden active:scale-95", {"pointer-events-none": !entry.data.prevSlug}]}>
+           rel={entry.data.prevSlug ? "prev" : null}
+           class:list={["post-nav-item w-full font-bold overflow-hidden active:scale-95", {"pointer-events-none": !entry.data.prevSlug}]}>
             {entry.data.prevSlug && <div class="btn-card rounded-2xl w-full h-[3.75rem] max-w-full px-4 flex items-center !justify-end gap-4">
                 <div class="overflow-hidden transition overflow-ellipsis whitespace-nowrap max-w-[calc(100%_-_3rem)] text-black/75 dark:text-white/75">
                     {entry.data.prevTitle}

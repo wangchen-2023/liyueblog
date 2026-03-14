@@ -41,7 +41,7 @@ const fallbackRandomUrl = randomPostPool[0]?.url || url("/");
 const pageTitle = `404 - ${notFoundTitle}`;
 ---
 
-<MainGridLayout title={pageTitle} description={notFoundDescription}>
+<MainGridLayout title={pageTitle} description={notFoundDescription} pageType="404">
 	<div class="card-base mb-4 onload-animation">
 		<div class="px-6 md:px-9 py-8 md:py-10">
 			<div class="flex items-center gap-3 text-50 mb-4">

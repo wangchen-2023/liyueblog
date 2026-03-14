@@ -3,10 +3,16 @@ interface Props {
 	badge?: string;
 	url?: string;
 	label?: string;
+	waifuText?: string;
 }
-const { badge, url, label } = Astro.props;
+const { badge, url, label, waifuText } = Astro.props;
 ---
-<a href={url} aria-label={label}>
+<a
+    href={url}
+    aria-label={label}
+    data-waifu-text={waifuText}
+    data-waifu-count={badge}
+>
     <button
         class:list={`
             w-full
@@ -27,7 +33,7 @@ const { badge, url, label } = Astro.props;
         }
     >
         <div class="flex items-center justify-between relative mr-2">
-            <div class="overflow-hidden text-left whitespace-nowrap overflow-ellipsis  ">
+            <div class="overflow-hidden text-left whitespace-nowrap overflow-ellipsis">
                 <slot></slot>
             </div>
             { badge !== undefined && badge !== null && badge !== '' &&
