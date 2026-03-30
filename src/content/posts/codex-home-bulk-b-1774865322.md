@@ -8,6 +8,8 @@ tags:
   - "test"
 category: "test"
 draft: false
+trashed: true
+trashedAt: "2026-03-30T10:08:51.525Z"
 ---
 
 home bulk test
