@@ -8,6 +8,8 @@ tags:
   - "test"
 category: "test"
 draft: false
+trashed: true
+trashedAt: "2026-03-30T10:55:19.667Z"
 ---
 
 refresh wait test
