@@ -7,6 +7,8 @@ tags:
   - "1"
 category: "1"
 draft: false
+trashed: true
+trashedAt: "2026-03-30T10:46:22.830Z"
 ---
 
 # 这是一个简单的 Markdown 示例
