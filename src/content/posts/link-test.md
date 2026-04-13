@@ -10,3 +10,4 @@ draft: false
 ---
 
 [li](https://liyueovo.top/)
+[test](http://localhost:4321/drafts)
