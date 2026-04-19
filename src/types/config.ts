@@ -23,7 +23,11 @@ export type SiteConfig = {
 	banner: {
 		enable: boolean;
 		src: string;
-		position?: "top" | "center" | "bottom";
+		/**
+		 * Equivalent to CSS `object-position`.
+		 * Supports `top | center | bottom` or any valid `object-position` string (e.g. `center 66.67%`).
+		 */
+		position?: "top" | "center" | "bottom" | string;
 		credit: {
 			enable: boolean;
 			text: string;
@@ -98,5 +102,5 @@ export type BlogPostData = {
 };
 
 export type ExpressiveCodeConfig = {
-	theme: string;
+	theme: string | [string, string];
 };

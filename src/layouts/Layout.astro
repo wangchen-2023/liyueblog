@@ -7,6 +7,7 @@ import ConfigCarrier from "@components/ConfigCarrier.astro";
 import Lantern from "@components/widget/Lantern.svelte";
 import RainEffect from "@components/widget/RainEffect.svelte";
 import { BACKGROUND_OPTIONS } from "@utils/background-utils";
+import { getBannerOffset } from "@utils/banner-utils";
 import { profileConfig, siteConfig } from "@/config";
 import {
 	AUTO_MODE,
@@ -16,12 +17,14 @@ import {
 	DARK_MODE,
 	DEFAULT_THEME,
 	LIGHT_MODE,
+	MAIN_PANEL_OVERLAPS_BANNER_HEIGHT,
 	PAGE_WIDTH,
 } from "../constants/constants";
 import { defaultFavicons } from "../constants/icon";
 import type { Favicon } from "../types/config";
 import { pathsEqual, url } from "../utils/url-utils";
 import "katex/dist/katex.css";
+import "../styles/transition.css";
 
 interface Props {
 	title?: string;
@@ -68,13 +71,8 @@ if (!lang) {
 }
 const siteLang = lang.replace("_", "-");
 
-const bannerOffsetByPosition = {
-	top: `${BANNER_HEIGHT_EXTEND}vh`,
-	center: `${BANNER_HEIGHT_EXTEND / 2}vh`,
-	bottom: "0",
-};
-const bannerOffset =
-	bannerOffsetByPosition[siteConfig.banner.position || "center"];
+const bannerOffset = getBannerOffset(siteConfig.banner.position);
+const homeBannerHeight = "52vh";
 ---
 
 <!DOCTYPE html>
@@ -115,7 +113,7 @@ const bannerOffset =
 		))}
 
 		<!-- Set the theme before the page is rendered to avoid a flash -->
-		<script is:inline define:vars={{DEFAULT_THEME, LIGHT_MODE, DARK_MODE, AUTO_MODE, BANNER_HEIGHT_EXTEND, PAGE_WIDTH, configHue, backgrounds: BACKGROUND_OPTIONS}}>
+		<script is:inline define:vars={{DEFAULT_THEME, LIGHT_MODE, DARK_MODE, AUTO_MODE, BANNER_HEIGHT_EXTEND, MAIN_PANEL_OVERLAPS_BANNER_HEIGHT, PAGE_WIDTH, configHue, backgrounds: BACKGROUND_OPTIONS}}>
 			// Load the theme from local storage
 			const theme = localStorage.getItem('theme') || DEFAULT_THEME;
 			switch (theme) {
@@ -138,20 +136,31 @@ const bannerOffset =
 			document.documentElement.style.setProperty('--hue', hue);
 
 			// Load background disabled state from local storage
-			// Default to enabled (false) if not set
+			// Default to enabled (false) to allow background switching
 			const root = document.documentElement;
-			const getBackgroundDisabledState = () => localStorage.getItem('backgroundDisabled') === 'true';
+	const getBackgroundDisabledState = () => localStorage.getItem('backgroundDisabled') === 'true';
 
-			// Apply background disabled state early to avoid flash
-			if (getBackgroundDisabledState()) {
-				root.classList.add('background-disabled');
-			} else {
-				root.classList.remove('background-disabled');
-			}
+	// Apply background disabled state early to avoid flash
+	if (getBackgroundDisabledState()) {
+		root.classList.add('background-disabled');
+		// Self-heal: if assets exist, auto re-enable in case the flag got stuck
+		if (Array.isArray(backgrounds) && backgrounds.length > 0) {
+			try { localStorage.setItem('backgroundDisabled', 'false'); } catch {}
+			root.classList.remove('background-disabled');
+		}
+	} else {
+		root.classList.remove('background-disabled');
+	}
 
-			// Load background blur from local storage
-			const backgroundBlur = localStorage.getItem('backgroundBlur') || '8';
+	// Load background blur from local storage
+			const storedBlur = localStorage.getItem('backgroundBlur');
+			const backgroundBlur = storedBlur === null || storedBlur === '8' ? '0' : storedBlur;
 			root.style.setProperty('--background-blur', `${backgroundBlur}px`);
+			try {
+				if (storedBlur === null || storedBlur === '8') {
+					localStorage.setItem('backgroundBlur', backgroundBlur);
+				}
+			} catch {}
 
 			// Background selection (stable across Swup navigation, changes on full refresh unless user chooses a fixed one)
 			// Background list is defined in src/utils/background-utils.ts
@@ -255,10 +264,133 @@ const bannerOffset =
 			let backgroundLayerInitialized = false;
 			let activeImageSrc = null;
 			let backgroundImageSwapToken = 0;
-			let backgroundVideoSwapToken = 0;
-			const failedVideoSources = new Set();
-			let lastSelectionStep = 1;
-			let backgroundTitleObserver = null;
+ 			let backgroundVideoSwapToken = 0;
+ 			const failedVideoSources = new Set();
+ 			let lastSelectionStep = 1;
+ 			let backgroundTitleObserver = null;
+			let bannerSwapToken = 0;
+			let activeBannerSrc = null;
+			const DISPLAY_MODE_KEY = 'backgroundDisplayMode';
+			const DISPLAY_MODE_BANNER = 'banner';
+			const DISPLAY_MODE_FULL = 'full';
+			let backgroundDisplayMode =
+				localStorage.getItem(DISPLAY_MODE_KEY) === DISPLAY_MODE_FULL
+					? DISPLAY_MODE_FULL
+					: DISPLAY_MODE_BANNER;
+			const applyBackgroundDisplayMode = (mode) => {
+				const normalized =
+					mode === DISPLAY_MODE_FULL ? DISPLAY_MODE_FULL : DISPLAY_MODE_BANNER;
+				const isFull = normalized === DISPLAY_MODE_FULL;
+				backgroundDisplayMode = normalized;
+				window.__backgroundDisplayMode = normalized;
+				try {
+					localStorage.setItem(DISPLAY_MODE_KEY, normalized);
+				} catch {}
+				const heightValue = isFull ? '100vh' : '66.67%';
+				root.classList.toggle('background-fullheight', isFull);
+				root.style.setProperty('--background-height', heightValue);
+				// keep main panel position unchanged when switching display modes
+				// keep colors/blur unchanged between modes
+				if (isFull) {
+					root.style.removeProperty('--home-banner-height-custom');
+				}
+				// Re-apply background so current image/video respects new height
+				const reapply = () => {
+					// If background is disabled, keep it off
+					if (getBackgroundDisabledState()) {
+						root.classList.add('background-disabled');
+						root.classList.remove('background-active');
+						root.classList.remove('background-video-live');
+						root.classList.add('background-video-hidden');
+						root.style.setProperty('--background-opacity', '0');
+						root.style.setProperty('--background-height', '0vh');
+						return;
+					}
+					setupBackground();
+				};
+				if (document.readyState === 'loading') {
+					document.addEventListener('DOMContentLoaded', reapply, { once: true });
+				} else {
+					reapply();
+				}
+				window.dispatchEvent(
+					new CustomEvent('background-display-mode-updated', {
+						detail: { mode: normalized },
+					})
+				);
+			};
+			const toggleBackgroundDisplayMode = () => {
+				applyBackgroundDisplayMode(
+					backgroundDisplayMode === DISPLAY_MODE_FULL
+						? DISPLAY_MODE_BANNER
+						: DISPLAY_MODE_FULL
+				);
+			};
+			window.__toggleBackgroundDisplayMode = toggleBackgroundDisplayMode;
+			window.__getBackgroundDisplayMode = () => backgroundDisplayMode;
+			applyBackgroundDisplayMode(backgroundDisplayMode);
+
+			const getBannerElements = () => {
+				const banner = document.getElementById('banner');
+				if (!banner) {
+					return { banner: null, img: null };
+				}
+				const img = banner.querySelector('img');
+				return { banner, img };
+			};
+
+			const applyBannerImage = (src) => {
+				if (!src) return;
+				const { banner, img } = getBannerElements();
+				if (!banner || !img) return;
+
+				const currentSrcAttr = img.getAttribute('src');
+				if (activeBannerSrc === src || currentSrcAttr === src) {
+					activeBannerSrc = src;
+					banner.classList.remove('opacity-0');
+					return;
+				}
+
+				const token = ++bannerSwapToken;
+				banner.classList.add('opacity-0');
+
+				const finish = () => {
+					if (token !== bannerSwapToken) return;
+					activeBannerSrc = src;
+					banner.classList.remove('opacity-0');
+				};
+
+				requestAnimationFrame(() => {
+					if (token !== bannerSwapToken) return;
+					try {
+						img.removeAttribute('srcset');
+						img.removeAttribute('sizes');
+					} catch {}
+					img.onload = finish;
+					img.onerror = finish;
+					img.setAttribute('src', src);
+					if (img.complete) {
+						requestAnimationFrame(finish);
+					}
+				});
+			};
+
+			const hideBannerMedia = () => {
+				const { banner } = getBannerElements();
+				if (!banner) return;
+				banner.classList.add('opacity-0');
+			};
+
+			const syncBannerWithBackground = () => {
+				const { banner, img } = getBannerElements();
+				if (!banner || !img || !selectedBackground) return;
+				if (selectedBackground.type === 'image') {
+					applyBannerImage(selectedBackground.src);
+				} else {
+					// When using a video background, hide the banner image so the video can show through.
+					hideBannerMedia();
+				}
+			};
 
 			const stripBackgroundTitleTooltips = () => {
 				const titledElements = document.querySelectorAll('[title]');
@@ -521,11 +653,11 @@ const bannerOffset =
 			};
 
 			// Create a function to handle background setup
-			function setupBackground() {
-				// Check if document.body exists
-				if (!document.body) {
-					console.error('document.body is null, cannot add video background');
-					// Try again later
+ 			function setupBackground() {
+ 				// Check if document.body exists
+ 				if (!document.body) {
+ 					console.error('document.body is null, cannot add video background');
+ 					// Try again later
 					setTimeout(setupBackground, 100);
 					return;
 				}
@@ -564,7 +696,6 @@ const bannerOffset =
 				if (selectedBackground.type === 'video') {
 					backgroundImageSwapToken += 1;
 					const currentActiveVideo = document.getElementById('background-video');
-					
 					// Always reset video state before applying new video
 					root.classList.remove('background-video-live');
 					root.classList.remove('background-video-hidden');
@@ -575,33 +706,35 @@ const bannerOffset =
 					// Set the background image for static or GIF backgrounds with crossfade
 					const existingVideo = document.getElementById('background-video');
 					const pendingVideo = document.getElementById('background-video-next');
-					if (pendingVideo) {
-						pendingVideo.remove();
-					}
 					backgroundVideoSwapToken += 1;
-					
-					// Start video fade-out immediately for smooth transition
-					if (existingVideo) {
-						root.classList.remove('background-video-live');
-						root.classList.add('background-video-hidden');
+					// Always reset video flags before switching to image to avoid
+					// keeping image layers hidden when switching quickly.
+					root.classList.remove('background-video-live');
+					root.classList.add('background-video-hidden');
+
+					if (pendingVideo) {
+						removeVideoElement(pendingVideo);
 					}
-					
+
 					// Apply image background
-					applyImageBackground(selectedBackground.src, () => {
-						// Remove video element after image is loaded
-						if (existingVideo) {
-							removeVideoElement(existingVideo);
-						}
-						
-						// Ensure background active class is applied
-						root.classList.add('background-active');
-					});
-				}
+ 					applyImageBackground(selectedBackground.src, () => {
+ 						// Remove video element after image is loaded
+ 						if (existingVideo) {
+ 							removeVideoElement(existingVideo);
+ 						}
+						root.classList.remove('background-video-hidden');
+ 						// Ensure background active class is applied
+ 						root.classList.add('background-active');
+ 					});
+ 				}
 				
-				// Apply background state
-				root.classList.remove('background-disabled');
-				root.classList.add('background-active');
-			}
+ 				// Apply background state
+ 				root.classList.remove('background-disabled');
+ 				root.classList.add('background-active');
+
+				// Keep the top banner in sync with the background selection.
+				syncBannerWithBackground();
+ 			}
 
 			const applyBackgroundSelection = (index) => {
 				if (!backgrounds.length) return;
@@ -700,6 +833,122 @@ const bannerOffset =
 				}
 			}
 
+			// Lightweight parallax motion for backgrounds
+			const PARALLAX_STRENGTH = 0.12;
+			const PARALLAX_MAX = 80;
+			const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+			const parallaxState = {
+				base: 0,
+				pulse: 0,
+				rafId: 0,
+				lastTs: performance.now(),
+			};
+
+			const clampParallax = (value) =>
+				Math.min(PARALLAX_MAX, Math.max(-PARALLAX_MAX, value));
+
+			const applyParallaxFrame = (timestamp) => {
+				parallaxState.rafId = 0;
+				const delta = Math.max(1, timestamp - parallaxState.lastTs);
+				parallaxState.lastTs = timestamp;
+
+				const decay = Math.pow(0.9, Math.min(3, delta / 16));
+				parallaxState.pulse *= decay;
+
+				const offset = clampParallax(parallaxState.base + parallaxState.pulse);
+				root.style.setProperty(
+					'--background-parallax-y',
+					prefersReducedMotion.matches ? '0px' : `${offset}px`
+				);
+
+				if (Math.abs(parallaxState.pulse) > 0.45) {
+					parallaxState.rafId = requestAnimationFrame(applyParallaxFrame);
+				}
+			};
+
+			const scheduleParallaxFrame = () => {
+				if (parallaxState.rafId) return;
+				parallaxState.rafId = requestAnimationFrame(applyParallaxFrame);
+			};
+
+			const updateParallaxBase = () => {
+				if (prefersReducedMotion.matches) {
+					root.style.setProperty('--background-parallax-y', '0px');
+					parallaxState.pulse = 0;
+					return;
+				}
+				const scrollY = window.scrollY || window.pageYOffset || 0;
+				parallaxState.base = clampParallax(-(scrollY * PARALLAX_STRENGTH));
+				scheduleParallaxFrame();
+			};
+
+			const kickParallaxPulse = (magnitude = 64) => {
+				if (prefersReducedMotion.matches) {
+					return;
+				}
+				parallaxState.pulse = magnitude * (Math.random() * 0.35 + 0.65);
+				if (Math.random() > 0.5) {
+					parallaxState.pulse *= -1;
+				}
+				scheduleParallaxFrame();
+			};
+
+			// Scroll-driven parallax
+			window.addEventListener('scroll', updateParallaxBase, { passive: true });
+
+			// Pulse on window state changes (minimize/restore, fullscreen, resize)
+			const triggerResizePulse = (() => {
+				let resizeRaf = 0;
+				return () => {
+					if (resizeRaf) cancelAnimationFrame(resizeRaf);
+					resizeRaf = requestAnimationFrame(() => {
+						updateParallaxBase();
+						kickParallaxPulse(52);
+						resizeRaf = 0;
+					});
+				};
+			})();
+
+			window.addEventListener('resize', triggerResizePulse);
+			window.addEventListener('focus', () => {
+				// 返回页面时仅同步位置，不触发额外位移
+				updateParallaxBase();
+			});
+			document.addEventListener('visibilitychange', () => {
+				if (document.visibilityState === 'visible') {
+					// 从其他标签/窗口回到本站时不再触发冲击动画
+					updateParallaxBase();
+				}
+			});
+			document.addEventListener('fullscreenchange', () => {
+				updateParallaxBase();
+				kickParallaxPulse(60);
+			});
+
+			const handleMotionPreferenceChange = () => {
+				if (prefersReducedMotion.matches) {
+					root.style.setProperty('--background-parallax-y', '0px');
+					parallaxState.pulse = 0;
+				} else {
+					updateParallaxBase();
+					kickParallaxPulse(40);
+				}
+			};
+
+			if (typeof prefersReducedMotion.addEventListener === 'function') {
+				prefersReducedMotion.addEventListener('change', handleMotionPreferenceChange);
+			} else if (typeof prefersReducedMotion.addListener === 'function') {
+				// Safari < 14 fallback
+				prefersReducedMotion.addListener(handleMotionPreferenceChange);
+			}
+
+			// Initial kick on page load/refresh
+			requestAnimationFrame(() => {
+				updateParallaxBase();
+				kickParallaxPulse(64);
+				applyBackgroundDisplayMode(backgroundDisplayMode);
+			});
+
 			// calculate the --banner-height-extend, which needs to be a multiple of 4 to avoid blurry text
 			let offset = Math.floor(window.innerHeight * (BANNER_HEIGHT_EXTEND / 100));
 			offset = offset - offset % 4;
@@ -732,6 +981,7 @@ const bannerOffset =
 
 		<!-- Live2D 模型初始化 -->
 		<script>
+			// @ts-nocheck
 			// live2d_path 模型资源路径
 			const live2d_path = "/live2d-widget/";
 			const live2d_asset_version = "20260313-1";
@@ -1506,24 +1756,50 @@ const bannerOffset =
 	bannerOffset,
 	'banner-height-home': `${BANNER_HEIGHT_HOME}vh`,
 	'banner-height': `${BANNER_HEIGHT}vh`,
+	'home-banner-height-custom': homeBannerHeight,
 }}>
 @tailwind components;
 @layer components {
+	.enable-banner {
+		--main-panel-top: calc(var(--banner-height) - 3.5rem);
+	}
 	.enable-banner.is-home #banner-wrapper {
-		@apply h-[var(--banner-height-home)] translate-y-[var(--banner-height-extend)]
+		@apply h-[var(--home-banner-height-custom)] translate-y-[var(--banner-height-extend)]
 	}
 	.enable-banner #banner-wrapper {
 		@apply h-[var(--banner-height-home)]
 	}
 
 	.enable-banner.is-home #banner {
-		@apply h-[var(--banner-height-home)] translate-y-0
+		@apply h-[var(--home-banner-height-custom)] translate-y-0
 	}
 	.enable-banner #banner {
 		@apply h-[var(--banner-height-home)] translate-y-[var(--bannerOffset)]
 	}
+	/* Hide the static banner whenever the global background system is active or explicitly disabled. */
+	:root.background-active #banner,
+	:root.background-disabled #banner {
+		display: none;
+	}
 	.enable-banner.is-home #main-grid {
-		@apply translate-y-[var(--banner-height-extend)];
+		transform: translateY(calc(var(--banner-height-extend) - 5.5rem));
+		position: relative;
+		isolation: isolate;
+	}
+	/* 移除 main-grid 遮罩层 */
+	.enable-banner.is-home #main-grid::before {
+		content: none;
+	}
+	.enable-banner.is-home #main-grid > * {
+		position: relative;
+		z-index: 1;
+	}
+	/* 移除 banner 遮罩层，保持图片完全清晰可见 */
+	.enable-banner.is-home #banner-wrapper::after {
+		content: none;
+	}
+	.enable-banner.is-home #top-row {
+		height: calc(var(--home-banner-height-custom) - 4.5rem);
 	}
 	.enable-banner #top-row {
 		@apply h-[calc(var(--banner-height-home)_-_4.5rem)] transition-all duration-300
@@ -1531,13 +1807,26 @@ const bannerOffset =
 	.enable-banner.is-home #sidebar-sticky {
 		@apply top-[calc(1rem_-_var(--banner-height-extend))]
 	}
+	.enable-banner.is-home #content-wrapper {
+		padding-bottom: 1.5rem;
+	}
+	.enable-banner.is-home #main-grid.home-main-grid #sidebar {
+		margin-top: -1.9rem;
+	}
+	.enable-banner.is-home #main-grid.home-main-grid #profile-card {
+		box-shadow:
+			0 28px 56px -34px rgba(0, 0, 0, 0.72),
+			0 0 0 1px rgba(255, 255, 255, 0.04);
+	}
 	.navbar-hidden {
 		@apply opacity-0 -translate-y-16
 	}
 }
+
 </style>
 
 <script>
+// @ts-nocheck
 import 'overlayscrollbars/overlayscrollbars.css';
 import {
 	OverlayScrollbars,
@@ -1599,7 +1888,7 @@ function disableAnimation() {
 }
 */
 
-const bannerEnabled = !!document.getElementById('banner-wrapper')
+const isBannerEnabled = () => document.body?.classList?.contains('enable-banner');
 
 function setClickOutsideToClose(panel: string, ignores: string[]) {
 	const isIgnoredTarget = (target: Node | null) => {
@@ -1643,6 +1932,99 @@ function loadTheme() {
 
 function loadHue() {
 	setHue(getHue())
+}
+
+let postNavScrollHandlerBound = false;
+let postNavTransitionRunning = false;
+let postNavVisitPending = false;
+
+function animateScrollToTop(duration: number) {
+	return new Promise<void>((resolve) => {
+		const startY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+		if (startY <= 4 || duration <= 0) {
+			window.scrollTo(0, 0);
+			resolve();
+			return;
+		}
+
+		const startTime = performance.now();
+		const easeInOutCubic = (t: number) => (
+			t < 0.5
+				? 4 * t * t * t
+				: 1 - ((-2 * t + 2) ** 3) / 2
+		);
+
+		const tick = (now: number) => {
+			const progress = Math.min(1, (now - startTime) / duration);
+			const eased = easeInOutCubic(progress);
+			const nextY = Math.max(0, Math.round(startY * (1 - eased)));
+			window.scrollTo(0, nextY);
+
+			if (progress < 1) {
+				requestAnimationFrame(tick);
+				return;
+			}
+
+			window.scrollTo(0, 0);
+			resolve();
+		};
+
+		requestAnimationFrame(tick);
+	});
+}
+
+function initPostNavScrollTransition() {
+	if (postNavScrollHandlerBound) return;
+	postNavScrollHandlerBound = true;
+
+	document.addEventListener("click", (event) => {
+		const target = event.target;
+		if (!(target instanceof Element)) return;
+
+		const link = target.closest("a[data-post-nav-link='true']");
+		if (!(link instanceof HTMLAnchorElement)) return;
+		if (!link.href || link.getAttribute("href") === "#") return;
+		if (
+			event.defaultPrevented ||
+			event.button !== 0 ||
+			link.target === "_blank" ||
+			event.metaKey ||
+			event.ctrlKey ||
+			event.shiftKey ||
+			event.altKey
+		) {
+			return;
+		}
+		if (postNavTransitionRunning) {
+			event.preventDefault();
+			return;
+		}
+
+		event.preventDefault();
+		postNavTransitionRunning = true;
+		postNavVisitPending = true;
+
+		const currentY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+		const duration = Math.min(760, Math.max(300, currentY * 0.2));
+		document.documentElement.classList.add("post-nav-scrolling");
+		document.documentElement.style.setProperty("--content-delay", "0ms");
+
+		animateScrollToTop(duration)
+			.catch(() => {})
+			.finally(() => {
+				document.documentElement.classList.remove("post-nav-scrolling");
+				document.documentElement.classList.add("post-nav-visit");
+				const href = link.href;
+				if (window?.swup?.navigate) {
+					window.swup.navigate(href);
+				} else {
+					window.location.href = href;
+				}
+				window.setTimeout(() => {
+					postNavTransitionRunning = false;
+				}, 120);
+			});
+	}, { passive: false, capture: true });
 }
 
 function initCustomScrollbar() {
@@ -1710,8 +2092,53 @@ function initCustomScrollbar() {
 	});
 }
 
+const AVATAR_BANNER_CUT_RATIO = 2 / 3;
+
+function syncHomeBannerHeightToAvatar() {
+	if (typeof window !== "undefined" && window.__bannerToggleInProgress) {
+		return;
+	}
+
+	const root = document.documentElement;
+	const body = document.body;
+
+	// Fullscreen background mode: keep height at 100vh, don't override.
+	if (root.classList.contains("background-fullheight")) {
+		return;
+	}
+
+	// Only adjust on the homepage where the profile avatar exists.
+	if (!body?.classList?.contains("lg:is-home")) {
+		root.style.removeProperty("--home-banner-height-custom");
+		root.style.removeProperty("--background-height");
+		return;
+	}
+
+	const bannerWrapper = document.getElementById("banner-wrapper");
+	const avatar = document.querySelector("#profile-card > a");
+	if (!(bannerWrapper instanceof HTMLElement) || !(avatar instanceof HTMLElement)) {
+		return;
+	}
+
+	const bannerRect = bannerWrapper.getBoundingClientRect();
+	const avatarRect = avatar.getBoundingClientRect();
+
+	const bannerTop = bannerRect.top + window.scrollY;
+	const avatarTop = avatarRect.top + window.scrollY;
+	const desiredBottom = avatarTop + avatarRect.height * AVATAR_BANNER_CUT_RATIO;
+
+	let desiredHeight = desiredBottom - bannerTop;
+	if (!Number.isFinite(desiredHeight)) return;
+	desiredHeight = Math.max(0, desiredHeight);
+	// Snap to a multiple of 4px to avoid blurry edges on some displays.
+	desiredHeight = desiredHeight - (desiredHeight % 4);
+
+	root.style.setProperty("--home-banner-height-custom", `${desiredHeight}px`);
+	root.style.setProperty("--background-height", `${desiredHeight}px`);
+}
+
 function showBanner() {
-	if (!siteConfig.banner.enable) return;
+	if (!isBannerEnabled()) return;
 
 	const banner = document.getElementById('banner');
 	if (!banner) {
@@ -1720,6 +2147,7 @@ function showBanner() {
 	}
 
 	banner.classList.remove('opacity-0', 'scale-105');
+	syncHomeBannerHeightToAvatar();
 }
 
 function init() {
@@ -1727,8 +2155,19 @@ function init() {
 	loadTheme();
 	loadHue();
 	initCustomScrollbar();
+	initPostNavScrollTransition();
 	showBanner();
 }
+
+window.addEventListener("banner-enabled-updated", () => {
+	requestAnimationFrame(() => {
+		showBanner();
+		requestAnimationFrame(() => {
+			syncHomeBannerHeightToAvatar();
+			scrollFunction();
+		});
+	});
+});
 
 /* Load settings when entering the site */
 init();
@@ -1751,7 +2190,7 @@ const setup = () => {
 		document.documentElement.style.setProperty('--content-delay', '0ms')
 
 		// prevent elements from overlapping the navbar
-		if (!bannerEnabled) {
+		if (!isBannerEnabled()) {
 			return
 		}
 		let threshold = window.innerHeight * (BANNER_HEIGHT / 100) - 72 - 16
@@ -1785,10 +2224,6 @@ const setup = () => {
 			toc.classList.add('toc-not-ready')
 		}
 
-        // Reset all animations and transitions temporarily
-        document.body.style.transition = 'none';
-        document.body.style.animation = 'none';
-        document.body.offsetHeight; // Force reflow
 	});
 	window.swup.hooks.on('page:view', () => {
 		// hide the temp high element when the transition is done
@@ -1797,22 +2232,19 @@ const setup = () => {
 			heightExtend.classList.add('hidden')
 		}
 
-        // Reset layout and force reflow
-        document.body.offsetHeight; // Force reflow
-
-        // Restore transitions and animations
-        setTimeout(() => {
-            document.body.style.transition = '';
-            document.body.style.animation = '';
-        }, 10);
-
         // Reset all onload animations
-        const animatedElements = document.querySelectorAll('.onload-animation');
-        animatedElements.forEach(element => {
-            element.style.animation = 'none';
-            element.offsetHeight; // Force reflow
-            element.style.animation = '';
-        });
+        const isPostNavVisit = postNavVisitPending || document.documentElement.classList.contains('post-nav-visit');
+        if (!isPostNavVisit) {
+            const animatedElements = document.querySelectorAll('.onload-animation');
+            animatedElements.forEach((element) => {
+                if (!(element instanceof HTMLElement)) return;
+                element.style.animation = 'none';
+                void element.offsetHeight; // Force reflow
+                element.style.animation = '';
+            });
+        } else {
+            document.documentElement.style.setProperty('--content-delay', '0ms');
+        }
 
         // Just make the transition looks better
         const toc = document.getElementById('toc-wrapper');
@@ -1823,6 +2255,13 @@ const setup = () => {
         // Re-initialize layout-dependent components
         initCustomScrollbar();
         showBanner();
+		scrollFunction();
+		if (isPostNavVisit) {
+			postNavVisitPending = false;
+			window.requestAnimationFrame(() => {
+				document.documentElement.classList.remove('post-nav-visit');
+			});
+		}
 	});
 	window.swup.hooks.on('visit:end', (_visit: {to: {url: string}}) => {
 		// No need for setTimeout here, handled in page:view
@@ -1839,25 +2278,37 @@ let toc = document.getElementById('toc-wrapper');
 let navbar = document.getElementById('navbar-wrapper')
 function scrollFunction() {
 	let bannerHeight = window.innerHeight * (BANNER_HEIGHT / 100)
+	const backToTopShowOffset = 260
+	const isPostNavTransitionActive =
+		document.documentElement.classList.contains('post-nav-scrolling') ||
+		document.documentElement.classList.contains('post-nav-visit');
+	const isPostPage = window.location.pathname.includes('/posts/')
+	backToTopBtn = document.getElementById('back-to-top-btn');
 
 	if (backToTopBtn) {
-		if (document.body.scrollTop > bannerHeight || document.documentElement.scrollTop > bannerHeight) {
+		if (document.body.scrollTop > backToTopShowOffset || document.documentElement.scrollTop > backToTopShowOffset) {
 			backToTopBtn.classList.remove('hide')
 		} else {
 			backToTopBtn.classList.add('hide')
 		}
 	}
 
-	if (bannerEnabled && toc) {
-		if (document.body.scrollTop > bannerHeight || document.documentElement.scrollTop > bannerHeight) {
+	if (isBannerEnabled() && toc) {
+		if (isPostPage) {
+			toc.classList.remove('toc-hide')
+		} else if (document.body.scrollTop > bannerHeight || document.documentElement.scrollTop > bannerHeight) {
 			toc.classList.remove('toc-hide')
 		} else {
 			toc.classList.add('toc-hide')
 		}
 	}
 
-	if (!bannerEnabled) return
+	if (!isBannerEnabled()) return
 	if (navbar) {
+		if (isPostNavTransitionActive) {
+			navbar.classList.remove('navbar-hidden')
+			return
+		}
 		const NAVBAR_HEIGHT = 72
 		const MAIN_PANEL_EXCESS_HEIGHT = MAIN_PANEL_OVERLAPS_BANNER_HEIGHT * 16			// The height the main panel overlaps the banner
 
@@ -1880,6 +2331,7 @@ window.onresize = () => {
 	let offset = Math.floor(window.innerHeight * (BANNER_HEIGHT_EXTEND / 100));
 	offset = offset - offset % 4;
 	document.documentElement.style.setProperty('--banner-height-extend', `${offset}px`);
+	window.requestAnimationFrame(() => syncHomeBannerHeightToAvatar());
 }
 
 </script>

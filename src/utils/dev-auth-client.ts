@@ -8,10 +8,7 @@ export function isSha256Hex(value: string): boolean {
 }
 
 export async function hashDevCodeClient(code: string): Promise<string> {
-	if (
-		typeof crypto === "undefined" ||
-		typeof crypto.subtle === "undefined"
-	) {
+	if (typeof crypto === "undefined" || typeof crypto.subtle === "undefined") {
 		throw new Error("当前环境不支持口令加密");
 	}
 	const input = new TextEncoder().encode(code);
@@ -23,8 +20,7 @@ export async function hashDevCodeClient(code: string): Promise<string> {
 
 function canUseStorage(): boolean {
 	return (
-		typeof window !== "undefined" &&
-		typeof window.localStorage !== "undefined"
+		typeof window !== "undefined" && typeof window.localStorage !== "undefined"
 	);
 }
 
@@ -51,7 +47,10 @@ export function readStoredDevCredential(): string {
 export function storeDevCredential(hash: string): void {
 	if (!canUseStorage()) return;
 	if (!isSha256Hex(hash)) return;
-	localStorage.setItem(DEV_EDITOR_CREDENTIAL_STORAGE_KEY, hash.trim().toLowerCase());
+	localStorage.setItem(
+		DEV_EDITOR_CREDENTIAL_STORAGE_KEY,
+		hash.trim().toLowerCase(),
+	);
 	localStorage.removeItem(DEV_EDITOR_LEGACY_CODE_STORAGE_KEY);
 }
 
@@ -65,7 +64,8 @@ export async function migrateLegacyDevCodeToCredential(): Promise<void> {
 	if (!canUseStorage()) return;
 	if (readStoredDevCredential()) return;
 
-	const legacyRaw = localStorage.getItem(DEV_EDITOR_LEGACY_CODE_STORAGE_KEY) || "";
+	const legacyRaw =
+		localStorage.getItem(DEV_EDITOR_LEGACY_CODE_STORAGE_KEY) || "";
 	const legacy = legacyRaw.trim();
 	if (!legacy) return;
 

@@ -1,5 +1,5 @@
-import type { APIRoute } from "astro";
 import { matchDevCredential } from "@utils/dev-auth-server";
+import type { APIRoute } from "astro";
 
 export const prerender = false;
 

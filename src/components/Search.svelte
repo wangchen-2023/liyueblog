@@ -208,6 +208,7 @@ $: if (initialized && keywordMobile) {
 {#if developerModeEnabled}
     <a
        href={editorHref}
+       data-no-swup
        aria-label="Open Editor"
        class="btn-plain scale-animation hidden lg:!inline-flex rounded-lg h-11 w-11 active:scale-90 mr-2"
        title="文章"
@@ -216,6 +217,7 @@ $: if (initialized && keywordMobile) {
     </a>
     <a
        href={draftsHref}
+       data-no-swup
        aria-label="Open Drafts"
        class="btn-plain scale-animation hidden lg:!inline-flex rounded-lg h-11 w-11 active:scale-90 mr-2"
        title="草稿"
@@ -224,11 +226,15 @@ $: if (initialized && keywordMobile) {
     </a>
     <a
        href={trashHref}
+       data-no-swup
        aria-label="Open Trash"
        class="btn-plain scale-animation hidden lg:!inline-flex rounded-lg h-11 w-11 active:scale-90 mr-2 text-red-500/90 hover:text-red-500"
        title="垃圾桶"
     >
-        <Icon icon="material-symbols:delete-outline-rounded" class="text-[1.25rem]"></Icon>
+        <Icon
+           icon="material-symbols:delete-outline-rounded"
+           class="text-[1.25rem] !text-red-500"
+        ></Icon>
     </a>
 {/if}
 

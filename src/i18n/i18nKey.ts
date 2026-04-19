@@ -3,42 +3,34 @@ enum I18nKey {
 	about = "about",
 	archive = "archive",
 	search = "search",
-
-	tags = "tags",
-	categories = "categories",
-	recentPosts = "recentPosts",
-
-	comments = "comments",
-
-	untitled = "untitled",
+	themeColor = "themeColor",
+	lightMode = "lightMode",
+	darkMode = "darkMode",
+	systemMode = "systemMode",
 	uncategorized = "uncategorized",
+	categories = "categories",
+	tags = "tags",
+	more = "more",
 	noTags = "noTags",
-
+	postCount = "postCount",
+	postsCount = "postsCount",
 	wordCount = "wordCount",
 	wordsCount = "wordsCount",
 	minuteCount = "minuteCount",
 	minutesCount = "minutesCount",
-	postCount = "postCount",
-	postsCount = "postsCount",
-
-	themeColor = "themeColor",
-
-	lightMode = "lightMode",
-	darkMode = "darkMode",
-	systemMode = "systemMode",
-
-	more = "more",
-
+	pageNotFound = "pageNotFound",
+	pageNotFoundDescription = "pageNotFoundDescription",
+	pageNotFoundHint = "pageNotFoundHint",
+	backToHome = "backToHome",
+	viewArchives = "viewArchives",
+	randomPost = "randomPost",
+	goHome = "goHome",
+	goArchive = "goArchive",
+	goBack = "goBack",
+	untitled = "untitled",
 	author = "author",
 	publishedAt = "publishedAt",
 	license = "license",
-
-	// 404 page
-	pageNotFound = "pageNotFound",
-	pageNotFoundDescription = "pageNotFoundDescription",
-	backToHome = "backToHome",
-	viewArchives = "viewArchives",
-	pageNotFoundHint = "pageNotFoundHint",
 }
 
 export default I18nKey;

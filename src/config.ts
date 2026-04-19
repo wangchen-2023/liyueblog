@@ -17,11 +17,11 @@ export const siteConfig: SiteConfig = {
 	},
 	banner: {
 		enable: false,
-		src: "assets/images/demo-banner.png", // Relative to the /src directory. Relative to the /public directory if it starts with '/'
-		position: "center", // Equivalent to object-position, only supports 'top', 'center', 'bottom'. 'center' by default
+		src: "/background/7.webp", // Relative to the /src directory. Relative to the /public directory if it starts with '/'
+		position: "center 66.67%", // Equivalent to CSS object-position. e.g. 'top', 'center', 'bottom', or 'center 66.67%'
 		credit: {
 			enable: false, // Display the credit text of the banner image
-			text: "", // Credit text to be displayed
+			text: "1111111111111", // Credit text to be displayed
 			url: "", // (Optional) URL link to the original artwork or artist's page
 		},
 	},
@@ -83,6 +83,6 @@ export const licenseConfig: LicenseConfig = {
 
 export const expressiveCodeConfig: ExpressiveCodeConfig = {
 	// Note: Some styles (such as background color) are being overridden, see the astro.config.mjs file.
-	// Please select a dark theme, as this blog theme currently only supports dark background color
-	theme: "github-dark",
+	// [lightTheme, darkTheme]
+	theme: ["github-light", "github-dark"],
 };

@@ -31,7 +31,7 @@ const getNavItemClasses = (targetUrl: string, external = false) => {
 	return classes.join(" ");
 };
 ---
-<div id="navbar" class="z-50 onload-animation">
+<div id="navbar" class="z-50">
     <div class="absolute h-8 left-0 right-0 -top-8 bg-[var(--card-bg)] transition"></div> <!-- used for onload animation -->
     <div class:list={[
         className,
@@ -56,6 +56,21 @@ const getNavItemClasses = (targetUrl: string, external = false) => {
         <div class="flex">
             <!--<SearchPanel client:load>-->
             <Search client:only="svelte"></Search>
+            <button aria-label="背景模式切换" class="btn-plain scale-animation rounded-lg h-11 w-11 active:scale-90" id="background-mode-switch">
+                <Icon name="material-symbols:landscape-rounded" class="text-[1.25rem]"></Icon>
+            </button>
+            <button aria-label="横幅启用开关" class="btn-plain scale-animation rounded-lg h-11 w-11 active:scale-90" id="banner-enable-switch">
+                <div id="banner-enable-icon-off" class="absolute transition-opacity duration-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="text-[1.25rem]" width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true">
+                        <path fill="currentColor" d="M5 21q-.825 0-1.412-.587T3 19v-6h2v6h6v2zm8 0v-2h6v-6h2v6q0 .825-.587 1.413T19 21zm-7-4l3-4l2.25 3l3-4L18 17zm-3-6V5q0-.825.588-1.412T5 3h6v2H5v6zm16 0V5h-6V3h6q.825 0 1.413.588T21 5v6zm-4.575-1.425Q14 9.15 14 8.5t.425-1.075T15.5 7t1.075.425T17 8.5t-.425 1.075T15.5 10t-1.075-.425"></path>
+                    </svg>
+                </div>
+                <div id="banner-enable-icon-on" class="absolute transition-opacity duration-200 opacity-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="text-[1.25rem]" width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true">
+                        <path fill="currentColor" d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm0-2h14V5H5zm1-2h12l-3.75-5l-3 4L9 13zm-1 2V5z"></path>
+                    </svg>
+                </div>
+            </button>
             {!siteConfig.themeColor.fixed && (
                     <button aria-label="Display Settings" class="btn-plain scale-animation rounded-lg h-11 w-11 active:scale-90" id="display-settings-switch">
                         <Icon name="material-symbols:palette-outline" class="text-[1.25rem]"></Icon>
@@ -72,6 +87,7 @@ const getNavItemClasses = (targetUrl: string, external = false) => {
 </div>
 
 <script>
+// @ts-nocheck
 const DEV_EDITOR_KEY = "devEditorEnabled";
 const DEV_EDITOR_CREDENTIAL_KEY = "devEditorCredential";
 const DEV_EDITOR_LEGACY_CODE_KEY = "devEditorCode";
@@ -152,6 +168,106 @@ function loadButtonScript() {
         };
     }
 
+    const backgroundModeBtn = document.getElementById("background-mode-switch");
+    const bannerEnableBtn = document.getElementById("banner-enable-switch");
+    const bannerEnableIconOff = document.getElementById("banner-enable-icon-off");
+    const bannerEnableIconOn = document.getElementById("banner-enable-icon-on");
+
+    const getCurrentDisplayMode = () => {
+        const root = document.documentElement;
+        if (root.classList.contains("background-fullheight")) return "full";
+        const stored = localStorage.getItem("backgroundDisplayMode");
+        return stored === "full" ? "full" : "banner";
+    };
+    const syncBackgroundModeBtn = (mode) => {
+        if (!backgroundModeBtn) return;
+        const isFull = mode === "full";
+        backgroundModeBtn.classList.toggle("text-[var(--primary)]", isFull);
+        backgroundModeBtn.setAttribute("aria-pressed", isFull ? "true" : "false");
+    };
+    const applyDisplayMode = (mode) => {
+        const root = document.documentElement;
+        const normalized = mode === "full" ? "full" : "banner";
+        root.classList.add("background-mode-switching");
+        void root.offsetHeight;
+        requestAnimationFrame(() => {
+            root.classList.toggle("background-fullheight", normalized === "full");
+            root.style.setProperty("--background-height", normalized === "full" ? "100vh" : "66.67%");
+            try { localStorage.setItem("backgroundDisplayMode", normalized); } catch {}
+            window.dispatchEvent(new CustomEvent("background-display-mode-updated", { detail: { mode: normalized } }));
+            syncBackgroundModeBtn(normalized);
+        });
+        window.setTimeout(() => {
+            root.classList.remove("background-mode-switching");
+        }, 460);
+    };
+
+    const getCurrentBannerEnabled = () => document.body.classList.contains("enable-banner");
+    const syncBannerEnableBtn = (enabled) => {
+        if (!bannerEnableBtn) return;
+        bannerEnableBtn.classList.toggle("text-[var(--primary)]", enabled);
+        bannerEnableBtn.setAttribute("aria-pressed", enabled ? "true" : "false");
+        if (bannerEnableIconOff) {
+            bannerEnableIconOff.classList.toggle("opacity-0", enabled);
+        }
+        if (bannerEnableIconOn) {
+            bannerEnableIconOn.classList.toggle("opacity-0", !enabled);
+        }
+    };
+    const applyBannerEnabled = (enabled) => {
+        const root = document.documentElement;
+        window.__bannerToggleInProgress = true;
+        root.classList.add("background-mode-switching");
+        void root.offsetHeight;
+        requestAnimationFrame(() => {
+            document.body.classList.toggle("enable-banner", enabled);
+            try { localStorage.setItem("bannerEnabled", enabled ? "true" : "false"); } catch {}
+            window.dispatchEvent(new CustomEvent("banner-enabled-updated", { detail: { enabled } }));
+            syncBannerEnableBtn(enabled);
+        });
+        window.setTimeout(() => {
+            root.classList.remove("background-mode-switching");
+            window.__bannerToggleInProgress = false;
+        }, 460);
+    };
+
+    if (backgroundModeBtn) {
+        backgroundModeBtn.onclick = function () {
+            const next = getCurrentDisplayMode() === "full" ? "banner" : "full";
+            if (typeof window.__toggleBackgroundDisplayMode === "function") {
+                window.__toggleBackgroundDisplayMode();
+            } else {
+                applyDisplayMode(next);
+            }
+        };
+    }
+    if (bannerEnableBtn) {
+        bannerEnableBtn.onclick = function () {
+            applyBannerEnabled(!getCurrentBannerEnabled());
+        };
+    }
+    try {
+        const storedBanner = localStorage.getItem("bannerEnabled");
+        if (storedBanner === "true" || storedBanner === "false") {
+            applyBannerEnabled(storedBanner === "true");
+        } else {
+            syncBannerEnableBtn(getCurrentBannerEnabled());
+        }
+        syncBackgroundModeBtn(getCurrentDisplayMode());
+    } catch {}
+    window.addEventListener("background-display-mode-updated", (event) => {
+        const mode = event?.detail?.mode;
+        if (typeof mode === "string") {
+            syncBackgroundModeBtn(mode);
+        }
+    });
+    window.addEventListener("banner-enabled-updated", (event) => {
+        const enabled = event?.detail?.enabled;
+        if (typeof enabled === "boolean") {
+            syncBannerEnableBtn(enabled);
+        }
+    });
+
     applyDevEditorButtonVisibility();
 }
 
@@ -172,6 +288,17 @@ window.addEventListener("storage", (event) => {
     }
 });
 </script>
+
+<style>
+:global(html.background-mode-switching #banner-wrapper),
+:global(html.background-mode-switching #main-grid) {
+    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), height 0.42s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+}
+
+:global(html.background-mode-switching #main-panel-shell) {
+    transition: top 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+</style>
 
 {import.meta.env.PROD && <script is:inline define:vars={{scriptUrl: url('/pagefind/pagefind.js')}}>
 async function loadPagefind() {

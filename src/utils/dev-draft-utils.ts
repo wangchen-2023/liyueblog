@@ -192,8 +192,7 @@ export function migrateLegacyDraft(): void {
 			image: legacy.image || "",
 			draft: Boolean(legacy.draft),
 			content: legacy.content || "",
-			published:
-				typeof legacy.published === "string" ? legacy.published : "",
+			published: typeof legacy.published === "string" ? legacy.published : "",
 		});
 		localStorage.removeItem(LEGACY_DRAFT_KEY);
 	} catch {

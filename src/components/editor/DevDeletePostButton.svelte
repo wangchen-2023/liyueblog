@@ -1,7 +1,8 @@
 <script lang="ts">
-import Icon from "@iconify/svelte";
 import DevConfirmDialog from "@components/editor/DevConfirmDialog.svelte";
+import Icon from "@iconify/svelte";
 import { readStoredDevCredential } from "@utils/dev-auth-client";
+import { waitForPostsToDisappear } from "@utils/dev-refresh-wait-client";
 import { getDeveloperModeEnabled } from "@utils/setting-utils";
 import { url } from "@utils/url-utils";
 import { onMount } from "svelte";
@@ -87,25 +88,46 @@ function readDevCode(): string {
 
 function performSuccessAction() {
 	if (afterSuccess === "home") {
-		window.location.href = url("/");
+		window.location.replace(url("/"));
 		return;
 	}
 	window.location.reload();
 }
 
-function runSuccessAction() {
+async function runSuccessAction() {
 	if (afterSuccess === "none") return;
+	const targetUrl =
+		afterSuccess === "home"
+			? new URL(url("/"), window.location.origin).toString()
+			: window.location.href;
+	const waitPromise = waitForPostsToDisappear({
+		pageUrl: targetUrl,
+		postIds: [postId],
+		titles: [title],
+	});
+
 	if (document.visibilityState !== "visible" || !document.hasFocus()) {
+		await waitPromise;
 		performSuccessAction();
 		return;
 	}
-	window.setTimeout(() => {
-		performSuccessAction();
-	}, 460);
+
+	showNotice("正在等待页面更新...", "info");
+	await waitPromise;
+	performSuccessAction();
 }
 
 async function movePostToTrash(rememberChoice = false) {
 	if (isSubmitting || !postId) return;
+
+	if (afterSuccess === "home") {
+		try {
+			window.history.replaceState(window.history.state, "", url("/"));
+		} catch (_error) {
+			// Ignore history update failures.
+		}
+	}
+
 	const devCodeHash = readDevCode();
 	if (!devCodeHash) {
 		showNotice("缺少开发者口令，请重新解锁开发者模式", "error");
@@ -136,7 +158,7 @@ async function movePostToTrash(rememberChoice = false) {
 		showNotice(`已移入垃圾桶：${title || "文章"}`, "success");
 		setSkipTrashConfirm(rememberChoice);
 		dialogOpen = false;
-		runSuccessAction();
+		await runSuccessAction();
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "移入垃圾桶失败";
 		showNotice(message, "error");

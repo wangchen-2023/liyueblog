@@ -24,6 +24,12 @@ export const BACKGROUND_OPTIONS: BackgroundOption[] = [
 	{ src: withBasePath("/background/3.webp"), type: "image" },
 	{ src: withBasePath("/background/4.webp"), type: "image" },
 	{ src: withBasePath("/background/5.webp"), type: "image" },
+	{ src: withBasePath("/background/6.webp"), type: "image" },
+	{ src: withBasePath("/background/7.webp"), type: "image" },
+	{ src: withBasePath("/background/8.webp"), type: "image" },
+	{ src: withBasePath("/background/9.webp"), type: "image" },
+	{ src: withBasePath("/background/10.webp"), type: "image" },
+	{ src: withBasePath("/background/11.webp"), type: "image" },
 	{ src: withBasePath("/background/rain.mp4"), type: "video" },
 ];
 

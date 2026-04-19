@@ -7,6 +7,12 @@ import {
 	normalizeBackgroundIndex,
 } from "@utils/background-utils";
 import {
+	clearStoredDevCredential,
+	hashDevCodeClient,
+	migrateLegacyDevCodeToCredential,
+	storeDevCredential,
+} from "@utils/dev-auth-client";
+import {
 	getBackgroundBlur,
 	getBackgroundDisabled,
 	getDefaultHue,
@@ -29,12 +35,6 @@ import {
 import { onMount } from "svelte";
 import { cubicOut } from "svelte/easing";
 import { fade, fly, scale } from "svelte/transition";
-import {
-	clearStoredDevCredential,
-	hashDevCodeClient,
-	migrateLegacyDevCodeToCredential,
-	storeDevCredential,
-} from "@utils/dev-auth-client";
 
 let hue = getHue();
 const defaultHue = getDefaultHue();
@@ -79,9 +79,9 @@ const DEV_EDITOR_EMPTY_CODE_MESSAGES = [
 	"口令框空空的喵 先喂我点暗号",
 	"什么都没输入 我只能装作听不懂",
 	"小手回车太快啦 先把口令写上",
-  "键盘敲得很自信 结果一个字都没留",
+	"键盘敲得很自信 结果一个字都没留",
 	"空白也想开门 你对我期待有点高",
-  "回车按得挺果断 口令呢"
+	"回车按得挺果断 口令呢",
 ];
 const DEV_EDITOR_WRONG_CODE_MESSAGES = [
 	"暗号差一点点 再想想那个最顺手的",

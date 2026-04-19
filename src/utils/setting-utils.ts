@@ -12,6 +12,19 @@ import {
 import { expressiveCodeConfig } from "@/config";
 import type { LIGHT_DARK_MODE } from "@/types/config";
 
+function resolveExpressiveCodeTheme(theme: LIGHT_DARK_MODE): string {
+	const configured = expressiveCodeConfig.theme;
+	if (Array.isArray(configured)) {
+		const [lightTheme, darkTheme] = configured;
+		if (theme === DARK_MODE) return darkTheme;
+		if (theme === LIGHT_MODE) return lightTheme;
+		return window.matchMedia("(prefers-color-scheme: dark)").matches
+			? darkTheme
+			: lightTheme;
+	}
+	return configured;
+}
+
 function canUseStorage(): boolean {
 	return (
 		typeof window !== "undefined" && typeof window.localStorage !== "undefined"
@@ -67,19 +80,31 @@ export function applyThemeToDocument(theme: LIGHT_DARK_MODE) {
 	// Set to theme for Expressive Code
 	document.documentElement.setAttribute(
 		"data-theme",
-		expressiveCodeConfig.theme,
+		resolveExpressiveCodeTheme(theme),
 	);
 }
 
-function applyThemeWithoutTransitions(theme: LIGHT_DARK_MODE): void {
+function applyThemeWithTransitions(theme: LIGHT_DARK_MODE): void {
 	const root = document.documentElement;
-	root.classList.add("theme-switching");
-	applyThemeToDocument(theme);
-	window.requestAnimationFrame(() => {
-		window.requestAnimationFrame(() => {
-			root.classList.remove("theme-switching");
+	const prefersReducedMotion = window.matchMedia(
+		"(prefers-reduced-motion: reduce)",
+	).matches;
+	const doc = document as Document & {
+		startViewTransition?: (callback: () => void) => { finished?: Promise<void> };
+	};
+
+	if (!prefersReducedMotion && typeof doc.startViewTransition === "function") {
+		doc.startViewTransition(() => {
+			applyThemeToDocument(theme);
 		});
-	});
+		return;
+	}
+
+	root.classList.add("theme-switching-soft");
+	applyThemeToDocument(theme);
+	window.setTimeout(() => {
+		root.classList.remove("theme-switching-soft");
+	}, 320);
 }
 
 export function setTheme(theme: LIGHT_DARK_MODE): void {
@@ -87,7 +112,7 @@ export function setTheme(theme: LIGHT_DARK_MODE): void {
 		return;
 	}
 	localStorage.setItem("theme", theme);
-	applyThemeWithoutTransitions(theme);
+	applyThemeWithTransitions(theme);
 }
 
 export function getStoredTheme(): LIGHT_DARK_MODE {
@@ -110,20 +135,43 @@ export function setBackgroundDisabled(disabled: boolean): void {
 	if (!canUseStorage()) {
 		return;
 	}
-	localStorage.setItem("backgroundDisabled", String(disabled));
-	const r = document.querySelector(":root") as HTMLElement;
+
+	// Persist first so listeners that read localStorage get the latest value.
+	try {
+		localStorage.setItem("backgroundDisabled", String(disabled));
+	} catch {
+		// Ignore storage errors; we still want to update the UI state.
+	}
+
+	const r = document.querySelector(":root") as HTMLElement | null;
 	if (r) {
 		r.classList.toggle("background-disabled", disabled);
-		if (!disabled) {
-			// Add background-active class to trigger the fade-in transition
+
+		if (disabled) {
+			// Collapse background while keeping the last rendered layer intact.
+			r.classList.remove("background-active");
+			r.classList.remove("background-video-live");
+			r.classList.add("background-video-hidden");
+			r.style.setProperty("--background-opacity", "0");
+			r.style.setProperty("--background-height", "0vh");
+		} else {
+			// Restore height based on the user's display mode preference to avoid
+			// sticking at 0vh after rapid toggles.
+			const displayMode =
+				localStorage.getItem("backgroundDisplayMode") === "full"
+					? "full"
+					: "banner";
+			const restoredHeight = displayMode === "full" ? "100vh" : "66.67%";
+			r.style.setProperty("--background-height", restoredHeight);
+			r.style.removeProperty("--background-opacity");
+
+			// Re-activate background on the next tick so CSS transitions run reliably.
 			setTimeout(() => {
 				r.classList.add("background-active");
 			}, 50);
-		} else {
-			// Remove background-active class to trigger the fade-out transition
-			r.classList.remove("background-active");
 		}
 	}
+
 	if (typeof window !== "undefined") {
 		const videos =
 			document.querySelectorAll<HTMLVideoElement>(".background-video");
@@ -134,6 +182,8 @@ export function setBackgroundDisabled(disabled: boolean): void {
 				video.play().catch(() => {});
 			}
 		});
+
+		// Notify listeners (Layout) to re-apply the actual background asset.
 		window.dispatchEvent(
 			new CustomEvent("background-disabled-change", {
 				detail: { disabled },
@@ -291,7 +341,9 @@ const DEV_EDITOR_CREDENTIAL_STORAGE_KEY = "devEditorCredential";
 const DEV_EDITOR_LEGACY_CODE_STORAGE_KEY = "devEditorCode";
 const DEV_EDITOR_AUTO_LOCK_AT_KEY = "devEditorAutoLockAt";
 const DEV_EDITOR_SESSION_KEY = "devEditorSessionActive";
+const DEV_EDITOR_SESSION_GRACE_UNTIL_KEY = "devEditorSessionGraceUntil";
 const DEV_EDITOR_AUTO_LOCK_DELAY_MS = 10 * 60 * 1000;
+const DEV_EDITOR_SESSION_RECOVERY_GRACE_MS = 30 * 1000;
 
 function emitDeveloperModeChange(enabled: boolean): void {
 	if (typeof window !== "undefined") {
@@ -315,7 +367,10 @@ function getDeveloperModeAutoLockAt(): number | null {
 }
 
 function hasDeveloperModeSession(): boolean {
-	if (typeof window === "undefined" || typeof window.sessionStorage === "undefined") {
+	if (
+		typeof window === "undefined" ||
+		typeof window.sessionStorage === "undefined"
+	) {
 		return false;
 	}
 	try {
@@ -323,6 +378,47 @@ function hasDeveloperModeSession(): boolean {
 	} catch {
 		return false;
 	}
+}
+
+function getDeveloperModeSessionGraceUntil(): number | null {
+	if (!canUseStorage()) {
+		return null;
+	}
+	const raw = localStorage.getItem(DEV_EDITOR_SESSION_GRACE_UNTIL_KEY);
+	if (!raw) {
+		return null;
+	}
+	const parsed = Number.parseInt(raw, 10);
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		localStorage.removeItem(DEV_EDITOR_SESSION_GRACE_UNTIL_KEY);
+		return null;
+	}
+	return parsed;
+}
+
+function recoverDeveloperModeSessionIfAllowed(): boolean {
+	if (!canUseStorage()) {
+		return false;
+	}
+	const graceUntil = getDeveloperModeSessionGraceUntil();
+	if (!graceUntil || Date.now() > graceUntil) {
+		localStorage.removeItem(DEV_EDITOR_SESSION_GRACE_UNTIL_KEY);
+		return false;
+	}
+	const credential =
+		localStorage.getItem(DEV_EDITOR_CREDENTIAL_STORAGE_KEY) ||
+		localStorage.getItem(DEV_EDITOR_LEGACY_CODE_STORAGE_KEY) ||
+		"";
+	if (!credential.trim()) {
+		localStorage.removeItem(DEV_EDITOR_SESSION_GRACE_UNTIL_KEY);
+		return false;
+	}
+	try {
+		sessionStorage.setItem(DEV_EDITOR_SESSION_KEY, "true");
+	} catch {
+		return false;
+	}
+	return true;
 }
 
 function expireDeveloperModeIfNeeded(): boolean {
@@ -333,19 +429,25 @@ function expireDeveloperModeIfNeeded(): boolean {
 		return false;
 	}
 	if (!hasDeveloperModeSession()) {
+		if (recoverDeveloperModeSessionIfAllowed()) {
+			return false;
+		}
 		localStorage.setItem(DEV_EDITOR_ENABLED_KEY, "false");
 		localStorage.removeItem(DEV_EDITOR_AUTO_LOCK_AT_KEY);
+		localStorage.removeItem(DEV_EDITOR_SESSION_GRACE_UNTIL_KEY);
 		localStorage.removeItem(DEV_EDITOR_CREDENTIAL_STORAGE_KEY);
 		localStorage.removeItem(DEV_EDITOR_LEGACY_CODE_STORAGE_KEY);
 		emitDeveloperModeChange(false);
 		return true;
 	}
+	localStorage.removeItem(DEV_EDITOR_SESSION_GRACE_UNTIL_KEY);
 	const autoLockAt = getDeveloperModeAutoLockAt();
 	if (!autoLockAt || Date.now() < autoLockAt) {
 		return false;
 	}
 	localStorage.setItem(DEV_EDITOR_ENABLED_KEY, "false");
 	localStorage.removeItem(DEV_EDITOR_AUTO_LOCK_AT_KEY);
+	localStorage.removeItem(DEV_EDITOR_SESSION_GRACE_UNTIL_KEY);
 	localStorage.removeItem(DEV_EDITOR_CREDENTIAL_STORAGE_KEY);
 	localStorage.removeItem(DEV_EDITOR_LEGACY_CODE_STORAGE_KEY);
 	emitDeveloperModeChange(false);
@@ -371,6 +473,14 @@ export function setDeveloperModeEnabled(
 	}
 	localStorage.setItem(DEV_EDITOR_ENABLED_KEY, String(enabled));
 	localStorage.removeItem(DEV_EDITOR_AUTO_LOCK_AT_KEY);
+	if (enabled) {
+		localStorage.setItem(
+			DEV_EDITOR_SESSION_GRACE_UNTIL_KEY,
+			String(Date.now() + DEV_EDITOR_SESSION_RECOVERY_GRACE_MS),
+		);
+	} else {
+		localStorage.removeItem(DEV_EDITOR_SESSION_GRACE_UNTIL_KEY);
+	}
 	try {
 		if (enabled) {
 			sessionStorage.setItem(DEV_EDITOR_SESSION_KEY, "true");
@@ -413,20 +523,22 @@ export function scheduleDeveloperModeAutoLock(
 // Background blur settings
 export function getBackgroundBlur(): number {
 	if (!canUseStorage()) {
-		return 8;
+		return 0;
 	}
 	const stored = localStorage.getItem("backgroundBlur");
-	return stored ? Number.parseInt(stored, 10) : 8;
+	const parsed = stored ? Number.parseInt(stored, 10) : 0;
+	return Number.isFinite(parsed) ? parsed : 0;
 }
 
 export function setBackgroundBlur(blur: number): void {
 	if (!canUseStorage()) {
 		return;
 	}
-	localStorage.setItem("backgroundBlur", String(blur));
+	const safeBlur = Number.isFinite(blur) ? blur : 0;
+	localStorage.setItem("backgroundBlur", String(safeBlur));
 	const r = document.querySelector(":root") as HTMLElement;
 	if (r) {
-		r.style.setProperty("--background-blur", `${blur}px`);
+		r.style.setProperty("--background-blur", `${safeBlur}px`);
 	}
 }
 

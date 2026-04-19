@@ -107,7 +107,9 @@ function getDefaultTogglePosition(marginPx = CONTROL_MARGIN_PX) {
 
 function updateLanternToastPosition() {
 	if (typeof window === "undefined") return;
-	const toastEl = document.querySelector(".lantern-toast") as HTMLElement | null;
+	const toastEl = document.querySelector(
+		".lantern-toast",
+	) as HTMLElement | null;
 	const toastWidth = toastEl?.offsetWidth || TOAST_ESTIMATED_WIDTH;
 	const toastHeight = toastEl?.offsetHeight || TOAST_ESTIMATED_HEIGHT;
 	const minX = TOAST_MIN_MARGIN_PX;
@@ -123,7 +125,8 @@ function updateLanternToastPosition() {
 	const { width, height } = getToggleSize();
 	const rightTopX = offsetX + width + TOAST_GAP_PX;
 	const leftTopX = offsetX - toastWidth - TOAST_GAP_PX;
-	const canPlaceRight = rightTopX + toastWidth <= window.innerWidth - TOAST_MIN_MARGIN_PX;
+	const canPlaceRight =
+		rightTopX + toastWidth <= window.innerWidth - TOAST_MIN_MARGIN_PX;
 	const canPlaceLeft = leftTopX >= TOAST_MIN_MARGIN_PX;
 	let x = rightTopX;
 	if (!canPlaceRight && canPlaceLeft) {

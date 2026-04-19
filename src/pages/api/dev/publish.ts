@@ -1,5 +1,7 @@
-import type { APIRoute } from "astro";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { matchDevCredential } from "@utils/dev-auth-server";
+import type { APIRoute } from "astro";
 
 export const prerender = false;
 
@@ -24,6 +26,25 @@ type GitHubFile = {
 };
 
 const POSTS_ROOT = "src/content/posts/";
+
+function getLocalRepoAbsolutePath(repoPath: string): string {
+	return resolve(process.cwd(), repoPath);
+}
+
+async function writeLocalRepoFile(
+	repoPath: string,
+	content: string,
+): Promise<void> {
+	if (!import.meta.env.DEV) return;
+	const absolutePath = getLocalRepoAbsolutePath(repoPath);
+	await mkdir(dirname(absolutePath), { recursive: true });
+	await writeFile(absolutePath, content, "utf8");
+}
+
+async function deleteLocalRepoFile(repoPath: string): Promise<void> {
+	if (!import.meta.env.DEV) return;
+	await rm(getLocalRepoAbsolutePath(repoPath), { force: true });
+}
 
 function json(status: number, payload: Record<string, unknown>) {
 	return new Response(JSON.stringify(payload), {
@@ -108,6 +129,64 @@ function normalizeImage(input: string): string {
 	return "";
 }
 
+function normalizeEditorUploadRepoPathFromUrl(rawUrl: string): string | null {
+	const trimmed = rawUrl.trim();
+	if (!trimmed) return null;
+
+	let pathname = trimmed;
+	if (/^https?:\/\//i.test(trimmed)) {
+		try {
+			pathname = new URL(trimmed).pathname;
+		} catch {
+			return null;
+		}
+	}
+
+	try {
+		pathname = decodeURIComponent(pathname);
+	} catch {
+		// Keep raw pathname when decode fails.
+	}
+
+	if (!pathname.startsWith("/uploads/editor/")) {
+		return null;
+	}
+	if (pathname.includes("..")) {
+		return null;
+	}
+
+	return `public${pathname}`;
+}
+
+function collectEditorUploadRepoPaths(input: {
+	content: string;
+	image: string;
+}): string[] {
+	const repoPaths = new Set<string>();
+
+	const collectFromUrl = (url: string) => {
+		const repoPath = normalizeEditorUploadRepoPathFromUrl(url);
+		if (repoPath) {
+			repoPaths.add(repoPath);
+		}
+	};
+
+	collectFromUrl(input.image);
+
+	const markdownImagePattern =
+		/!\[[^\]]*\]\(\s*(?:<)?([^)>\s]+)(?:>)?(?:\s+["'][^"']*["'])?\s*\)/gi;
+	for (const match of input.content.matchAll(markdownImagePattern)) {
+		collectFromUrl(match[1] || "");
+	}
+
+	const htmlImagePattern = /<img\b[^>]*\bsrc=(["'])(.*?)\1[^>]*>/gi;
+	for (const match of input.content.matchAll(htmlImagePattern)) {
+		collectFromUrl(match[2] || "");
+	}
+
+	return Array.from(repoPaths);
+}
+
 function toRepoPath(slug: string): string {
 	return `${POSTS_ROOT}${slug}.md`;
 }
@@ -142,10 +221,7 @@ function unquoteYamlValue(rawValue: string): string {
 	const value = rawValue.trim();
 	if (!value) return "";
 	if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
-		return value
-			.slice(1, -1)
-			.replace(/\\"/g, '"')
-			.replace(/\\\\/g, "\\");
+		return value.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");
 	}
 	if (value.startsWith("'") && value.endsWith("'") && value.length >= 2) {
 		return value.slice(1, -1).replace(/''/g, "'");
@@ -186,7 +262,9 @@ async function readRepoFile(params: {
 
 	if (!response.ok) {
 		const errText = await response.text();
-		throw new Error(`Failed to read GitHub file: ${response.status} ${errText}`);
+		throw new Error(
+			`Failed to read GitHub file: ${response.status} ${errText}`,
+		);
 	}
 
 	const result = (await response.json()) as {
@@ -232,7 +310,80 @@ async function writeRepoFile(params: {
 
 	if (!response.ok) {
 		const errText = await response.text();
-		throw new Error(`Failed to publish to GitHub: ${response.status} ${errText}`);
+		throw new Error(
+			`Failed to publish to GitHub: ${response.status} ${errText}`,
+		);
+	}
+
+	const result = (await response.json()) as {
+		commit?: { html_url?: string };
+	};
+
+	return result.commit?.html_url || "";
+}
+
+async function readRepoFileSha(params: {
+	githubBase: string;
+	path: string;
+	branch: string;
+	headers: Record<string, string>;
+}): Promise<string | null> {
+	const response = await fetch(
+		`${params.githubBase}/contents/${encodeGitHubPath(params.path)}?ref=${encodeURIComponent(params.branch)}`,
+		{
+			headers: params.headers,
+		},
+	);
+
+	if (response.status === 404) {
+		return null;
+	}
+
+	if (!response.ok) {
+		const errText = await response.text();
+		throw new Error(
+			`Failed to read GitHub file sha: ${response.status} ${errText}`,
+		);
+	}
+
+	const result = (await response.json()) as {
+		sha?: string;
+	};
+
+	return result.sha || null;
+}
+
+async function writeRepoBinaryFile(params: {
+	githubBase: string;
+	path: string;
+	branch: string;
+	headers: Record<string, string>;
+	contentBase64: string;
+	commitMessage: string;
+	sha?: string;
+}): Promise<string> {
+	const response = await fetch(
+		`${params.githubBase}/contents/${encodeGitHubPath(params.path)}`,
+		{
+			method: "PUT",
+			headers: {
+				...params.headers,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				message: params.commitMessage,
+				content: params.contentBase64,
+				branch: params.branch,
+				...(params.sha ? { sha: params.sha } : {}),
+			}),
+		},
+	);
+
+	if (!response.ok) {
+		const errText = await response.text();
+		throw new Error(
+			`Failed to publish image to GitHub: ${response.status} ${errText}`,
+		);
 	}
 
 	const result = (await response.json()) as {
@@ -268,7 +419,9 @@ async function deleteRepoFile(params: {
 
 	if (!response.ok) {
 		const errText = await response.text();
-		throw new Error(`Failed to delete GitHub file: ${response.status} ${errText}`);
+		throw new Error(
+			`Failed to delete GitHub file: ${response.status} ${errText}`,
+		);
 	}
 }
 
@@ -285,7 +438,7 @@ function buildMarkdown(payload: {
 	const published = payload.published || new Date().toISOString().slice(0, 10);
 	const tagLines = payload.tags.length
 		? payload.tags.map((tag) => `  - ${toYamlString(tag)}`).join("\n")
-		: "  - \"\"";
+		: '  - ""';
 
 	return `---
 title: ${toYamlString(payload.title)}
@@ -312,8 +465,7 @@ export const POST: APIRoute = async ({ request }) => {
 	if (!githubToken || !githubOwner || !githubRepo) {
 		return json(500, {
 			ok: false,
-			message:
-				"缺少发布环境变量：GITHUB_TOKEN / GITHUB_OWNER / GITHUB_REPO",
+			message: "缺少发布环境变量：GITHUB_TOKEN / GITHUB_OWNER / GITHUB_REPO",
 		});
 	}
 
@@ -431,6 +583,59 @@ export const POST: APIRoute = async ({ request }) => {
 		content,
 	});
 
+	const editorUploadRepoPaths = collectEditorUploadRepoPaths({
+		content,
+		image: normalizeImage(body.image || ""),
+	});
+	for (const repoPath of editorUploadRepoPaths) {
+		let existingSha: string | null = null;
+		try {
+			existingSha = await readRepoFileSha({
+				githubBase,
+				path: repoPath,
+				branch: githubBranch,
+				headers: commonHeaders,
+			});
+		} catch (error) {
+			const message =
+				error instanceof Error
+					? error.message
+					: `Failed to resolve image sha: ${repoPath}`;
+			return json(502, { ok: false, message });
+		}
+
+		let binary: Buffer | null = null;
+		try {
+			binary = await readFile(getLocalRepoAbsolutePath(repoPath));
+		} catch {
+			if (existingSha) {
+				continue;
+			}
+			return json(400, {
+				ok: false,
+				message: `本地图片不存在，无法发布：${repoPath}`,
+			});
+		}
+
+		try {
+			await writeRepoBinaryFile({
+				githubBase,
+				path: repoPath,
+				branch: githubBranch,
+				headers: commonHeaders,
+				contentBase64: binary.toString("base64"),
+				commitMessage: `chore(editor): upload image ${repoPath}`,
+				sha: existingSha || undefined,
+			});
+		} catch (error) {
+			const message =
+				error instanceof Error
+					? error.message
+					: `Failed to publish image: ${repoPath}`;
+			return json(502, { ok: false, message });
+		}
+	}
+
 	const commitMessage = originalSlug
 		? sourcePath === path
 			? `chore(post): update ${slug}`
@@ -475,6 +680,23 @@ export const POST: APIRoute = async ({ request }) => {
 				commitUrl,
 			});
 		}
+	}
+
+	try {
+		await writeLocalRepoFile(path, markdown);
+		if (originalSlug && sourcePath !== path) {
+			await deleteLocalRepoFile(sourcePath);
+		}
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Failed to sync local workspace";
+		return json(500, {
+			ok: false,
+			message: `${message}. GitHub is already updated at ${path}.`,
+			path,
+			slug,
+			commitUrl,
+		});
 	}
 
 	let deployed = false;

@@ -1,7 +1,7 @@
 <script lang="ts">
+import { createEventDispatcher, onMount, tick } from "svelte";
 import { cubicOut } from "svelte/easing";
 import { fade, scale } from "svelte/transition";
-import { createEventDispatcher, onMount, tick } from "svelte";
 
 type ConfirmEventDetail = {
 	rememberChoice: boolean;
@@ -214,6 +214,7 @@ onMount(() => {
 
 .dev-confirm-panel
   width unquote('min(31rem, calc(100vw - 1.5rem))')
+  max-width unquote('min(31rem, calc(100vw - 1.5rem))')
   border-radius calc(var(--radius-large) + 0.35rem)
   border 1px solid unquote('color-mix(in oklab, var(--primary) 24%, var(--btn-regular-bg-hover))')
   background unquote('linear-gradient(165deg, color-mix(in oklab, var(--card-bg) 96%, transparent) 0%, color-mix(in oklab, var(--btn-regular-bg) 94%, var(--card-bg)) 100%)')
@@ -221,6 +222,7 @@ onMount(() => {
   backdrop-filter blur(18px)
   padding 1.15rem
   color var(--btn-content)
+  overflow hidden
 
 .dev-confirm-label
   display inline-flex
@@ -261,6 +263,19 @@ onMount(() => {
   font-size 0.86rem
   line-height 1.55
   color unquote('color-mix(in oklab, var(--btn-content) 78%, transparent)')
+  max-width 100%
+  white-space pre-wrap
+  word-break break-all
+  max-height 5.8rem
+  overflow-y auto
+  overflow-x hidden
+  scrollbar-width none
+  -ms-overflow-style none
+
+.dev-confirm-note::-webkit-scrollbar
+  width 0
+  height 0
+  display none
 
 .dev-confirm-note.danger
   border-color rgba(244, 114, 182, 0.28)
@@ -281,6 +296,19 @@ onMount(() => {
   font-size 0.86rem
   line-height 1.55
   color rgba(220, 38, 38, 0.96)
+  max-width 100%
+  white-space pre-wrap
+  word-break break-all
+  max-height 5.8rem
+  overflow-y auto
+  overflow-x hidden
+  scrollbar-width none
+  -ms-overflow-style none
+
+.dev-confirm-warning::-webkit-scrollbar
+  width 0
+  height 0
+  display none
 
 :global(html.dark) .dev-confirm-warning
   border-color rgba(248, 113, 113, 0.28)

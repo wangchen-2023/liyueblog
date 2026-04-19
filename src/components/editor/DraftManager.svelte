@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
 import DevConfirmDialog from "@components/editor/DevConfirmDialog.svelte";
 import {
 	DEV_DRAFTS_UPDATED_EVENT,
@@ -15,8 +15,10 @@ type ConfirmEventDetail = {
 	rememberChoice: boolean;
 };
 
-const DEV_EDITOR_SKIP_DRAFT_DELETE_CONFIRM_KEY = "devEditorSkipDraftDeleteConfirm";
-const DEV_EDITOR_SKIP_DRAFT_TRASH_CONFIRM_KEY = "devEditorSkipDraftTrashConfirm";
+const DEV_EDITOR_SKIP_DRAFT_DELETE_CONFIRM_KEY =
+	"devEditorSkipDraftDeleteConfirm";
+const DEV_EDITOR_SKIP_DRAFT_TRASH_CONFIRM_KEY =
+	"devEditorSkipDraftTrashConfirm";
 
 export let publishedSlugs: string[] = [];
 
@@ -88,7 +90,9 @@ function clearLegacySkipDraftDeleteConfirmPreference() {
 
 function readSkipDraftTrashConfirmPreference(): boolean {
 	try {
-		return localStorage.getItem(DEV_EDITOR_SKIP_DRAFT_TRASH_CONFIRM_KEY) === "1";
+		return (
+			localStorage.getItem(DEV_EDITOR_SKIP_DRAFT_TRASH_CONFIRM_KEY) === "1"
+		);
 	} catch (_error) {
 		return false;
 	}
@@ -111,7 +115,7 @@ function formatTime(timestamp: number): string {
 }
 
 function excerpt(content: string): string {
-	return content.replace(/\s+/g, " ").trim().slice(0, 120) || "(空内容)";
+	return content.replace(/\s+/g, " ").trim().slice(0, 120) || "(绌哄唴瀹?";
 }
 
 function getSlugConflictCount(draft: DevDraft): number {
@@ -138,13 +142,13 @@ function hasSlugConflict(draft: DevDraft): boolean {
 function getSlugConflictMessage(draft: DevDraft): string {
 	const details: string[] = [];
 	if (hasPublishedSlugConflict(draft)) {
-		details.push("已发布文章占用");
+		details.push("与已发布文章 slug 冲突");
 	}
 	const duplicateCount = getSlugConflictCount(draft);
 	if (duplicateCount > 1) {
-		details.push(`共 ${duplicateCount} 篇草稿使用`);
+		details.push(`共 ${duplicateCount} 篇草稿使用该 slug`);
 	}
-	return details.length ? `(slug 冲突：${details.join("，")})` : "";
+	return details.length ? `(slug 冲突：${details.join("；")})` : "";
 }
 
 function getDraftTitle(draft: DevDraft): string {
@@ -261,11 +265,11 @@ onMount(() => {
 					这里显示“立即保存 / 自动保存”的本地草稿
 				</p>
 			</div>
-			<a class="new-btn" href="/editor">去写新文章</a>
+			<a class="new-btn" href="/editor" data-no-swup>去写新文章</a>
 		</div>
 
 		{#if drafts.length === 0}
-			<div class="empty-tip">还没有草稿，先去编辑器写一点内容再保存。</div>
+			<div class="empty-tip">还没有草稿，先去编辑器写点内容再保存。</div>
 		{:else}
 			<div class="draft-list">
 				{#each drafts as item}
@@ -301,9 +305,9 @@ onMount(() => {
 <DevConfirmDialog
 	open={Boolean(pendingDeleteDraft)}
 	label="移入垃圾桶"
-	title={pendingDeleteDraft ? `确认将《${getDraftTitle(pendingDeleteDraft)}》移入垃圾桶吗？` : ""}
-	description="草稿会先进入垃圾桶，后续仍可以在垃圾桶中恢复。"
-	note="如果只是想先清掉草稿箱里的内容，移入垃圾桶会更稳妥；只有在垃圾桶里彻底删除后才无法找回。"
+	title={pendingDeleteDraft ? `确认将「${getDraftTitle(pendingDeleteDraft)}」移入垃圾桶吗？` : ""}
+	description="草稿会先进入垃圾桶，后续仍可在垃圾桶中恢复。"
+	note="如果只是想先清理草稿箱，移入垃圾桶更稳妥；只有在垃圾桶里彻底删除后才无法找回。"
 	noteTone="danger"
 	confirmLabel="移入垃圾桶"
 	cancelLabel="再想想"
@@ -312,7 +316,7 @@ onMount(() => {
 	allowRememberChoice={true}
 	bind:rememberChoice={rememberMoveToTrash}
 	rememberChoiceLabel="以后将草稿移入垃圾桶时不再提醒（不建议）"
-	rememberChoiceHint="该选项只会保存在当前浏览器中，后续会直接把本地草稿移入垃圾桶。"
+	rememberChoiceHint="该选项只保存在当前浏览器中，后续会直接将本地草稿移入垃圾桶。"
 	tone="warning"
 	on:cancel={closeDeleteDialog}
 	on:alternate={confirmDeleteDraft}

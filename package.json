@@ -1,9 +1,10 @@
 {
   "name": "liyueblog",
   "type": "module",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "pnpm": {
     "overrides": {
+      "css-tree": "2.2.1",
       "svgo": "3.2.0",
       "vite": "6.4.1",
       "rollup": "4.59.0"
@@ -74,6 +75,7 @@
   "devDependencies": {
     "@astrojs/ts-plugin": "^1.10.6",
     "@biomejs/biome": "2.2.5",
+    "@sveltejs/vite-plugin-svelte": "5.1.1",
     "@types/hast": "^3.0.4",
     "@types/markdown-it": "^14.1.2",
     "@types/mdast": "^4.0.4",
@@ -81,5 +83,5 @@
     "postcss-import": "^16.1.1",
     "postcss-nesting": "^13.0.2"
   },
-  "packageManager": "pnpm@9.14.4"
+  "packageManager": "pnpm@10.33.0"
 }

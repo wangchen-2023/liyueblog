@@ -1,5 +1,11 @@
 @tailwind components;
 
+@font-face {
+    font-family: "KeinannMaruPOP";
+    src: url("/fonts/KeinannMaruPOP_CN-EN.ttf") format("truetype");
+    font-display: swap;
+}
+
 @layer components {
     .card-base {
         @apply rounded-[var(--radius-large)] overflow-hidden bg-[var(--card-bg)] transition;
@@ -163,6 +169,7 @@ body {
   min-height: 100vh;
   width: 100%;
   position: relative;
+  font-family: "KeinannMaruPOP", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Noto Sans SC", "Source Han Sans SC", sans-serif;
   /* Prevent body from scrolling independently */
   overflow-x: hidden;
 }
@@ -170,12 +177,16 @@ body {
 /* Background image container */
 :root {
   /* Default background images */
-  --background-image-a: url('/background/1.webp');
   --background-image-b: none;
   --background-opacity: 1;
+  --background-height: 66.67%;
+  --background-parallax-y: 0px;
+}
+:root.background-fullheight {
+  --background-height: 100vh;
 }
 
-/* Background layers for images */
+/* Background layers for images - 2/3 画幅显示效果，无遮罩无模糊 */
 :root::before,
 :root::after {
   content: '';
@@ -183,17 +194,19 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
+  height: var(--background-height, 66.67%);
   background-size: cover;
-  background-position: center;
+  background-position: center 66.67%;
   background-attachment: fixed;
   background-repeat: no-repeat;
-  /* Apply background blur effect */
-  filter: blur(var(--background-blur));
+  /* 移除模糊效果，保持图片清晰 */
+  filter: blur(var(--background-blur, 0px)) saturate(var(--background-saturation, 1)) brightness(var(--background-brightness, 1));
+  transform: translate3d(0, var(--background-parallax-y, 0px), 0);
+  will-change: transform, opacity;
   /* Set initial state based on backgroundDisabled setting */
   opacity: 0;
-  /* Smooth transition for opacity and background image */
-  transition: opacity 0.5s ease-in-out, filter 0.2s ease-out;
+  /* Smooth transition for opacity, size, and background image */
+  transition: opacity 0.5s ease-in-out, height 0.6s ease, background-image 0.5s ease-in-out;
   /* Ensure it's behind content */
   z-index: -4;
 }
@@ -207,28 +220,30 @@ body {
   z-index: -3;
 }
 
-/* Video background styles */
+/* Video background styles - 2/3 画幅显示效果，无遮罩无模糊 */
 .background-video {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
+  height: var(--background-height, 66.67%);
   object-fit: cover;
-  /* Apply background blur effect */
-  filter: blur(var(--background-blur));
+  object-position: center 66.67%;
+  /* 移除模糊效果，保持视频清晰 */
+  filter: blur(var(--background-blur, 0px)) saturate(var(--background-saturation, 1)) brightness(var(--background-brightness, 1));
+  transform: translate3d(0, var(--background-parallax-y, 0px), 0);
+  will-change: transform, opacity;
   /* Ensure it's behind content but above image background */
   z-index: -2;
-  /* Smooth transition for opacity */
-  transition: opacity 0.5s ease-in-out, filter 0.2s ease-out;
+  /* Smooth transition for opacity and height */
+  transition: opacity 0.5s ease-in-out, height 0.6s ease;
   /* Ensure video is hidden by default */
   opacity: 0;
 }
 
-/* Dark mode background */
+/* Dark mode background - 移除遮罩，保持图片完全可见 */
 :root.dark.background-active {
-  /* Add slight dark overlay for dark mode */
-  --background-opacity: 0.8;
+  --background-opacity: 1;
 }
 
 /* Background settings */
@@ -236,6 +251,8 @@ body {
 :root.background-disabled {
   /* Solid black background */
   background-color: black;
+  --background-opacity: 0;
+  --background-height: 0vh;
   /* Ensure transition is applied */
   transition: background-color 0.5s ease-out;
 }
@@ -244,7 +261,7 @@ body {
 :root.background-disabled::before,
 :root.background-disabled::after,
 :root.background-disabled .background-video {
-  opacity: 0;
+  opacity: 0 !important;
   filter: none !important;
 }
 
@@ -298,9 +315,11 @@ body {
   /* JavaScript will handle the hue changes */
 }
 
-/* Background blur */
+/* Background blur - 设为0确保无模糊 */
 :root {
-  --background-blur: 8px;
+  --background-blur: 0px;
+  --background-brightness: 1;
+  --background-saturation: 1;
 }
 
 /* Avoid transition storms during theme toggle */
@@ -311,4 +330,16 @@ body {
 :root.theme-switching *::before,
 :root.theme-switching *::after {
   transition: none !important;
+}
+
+/* Fallback smooth transitions for browsers without View Transitions API */
+:root.theme-switching-soft,
+:root.theme-switching-soft::before,
+:root.theme-switching-soft::after,
+:root.theme-switching-soft *,
+:root.theme-switching-soft *::before,
+:root.theme-switching-soft *::after {
+  transition-property: background-color, color, border-color, box-shadow, fill, stroke, opacity;
+  transition-duration: 280ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }

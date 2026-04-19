@@ -27,9 +27,19 @@ type PendingDialogAction =
 			item: TrashedPost;
 	  }
 	| {
+			kind: "post-bulk";
+			action: "delete";
+			items: TrashedPost[];
+	  }
+	| {
 			kind: "draft";
 			action: "restore" | "delete";
 			item: DevDraftTrashItem;
+	  }
+	| {
+			kind: "draft-bulk";
+			action: "delete";
+			items: DevDraftTrashItem[];
 	  }
 	| null;
 
@@ -44,6 +54,8 @@ let noticeType: "info" | "success" | "error" = "info";
 let postLoadError = "";
 let pendingDialogAction: PendingDialogAction = null;
 let deferredRefreshWhileDialogOpen = false;
+let selectedPostIds: string[] = [];
+let selectedDraftIds: string[] = [];
 
 function showNotice(message: string, type: "info" | "success" | "error") {
 	notice = message;
@@ -68,6 +80,8 @@ function refreshAccess() {
 	developerCodeMissing = enabled && !readDevCode();
 	if (!enabled) {
 		pendingDialogAction = null;
+		selectedPostIds = [];
+		selectedDraftIds = [];
 	}
 }
 
@@ -91,7 +105,9 @@ function slugify(input: string): string {
 		.replace(/-+/g, "-");
 }
 
-function getEffectiveDraftSlug(draft: Pick<DevDraft, "slug" | "title">): string {
+function getEffectiveDraftSlug(
+	draft: Pick<DevDraft, "slug" | "title">,
+): string {
 	return slugify((draft.slug || "").trim() || (draft.title || "").trim());
 }
 
@@ -103,11 +119,56 @@ function getDraftTitle(item: DevDraftTrashItem | DevDraft): string {
 	return item.title || "未命名草稿";
 }
 
+function isPostSelected(id: string): boolean {
+	return selectedPostIds.includes(id);
+}
+
+function isDraftSelected(id: string): boolean {
+	return selectedDraftIds.includes(id);
+}
+
+function togglePostSelection(id: string) {
+	selectedPostIds = isPostSelected(id)
+		? selectedPostIds.filter((item) => item !== id)
+		: [...selectedPostIds, id];
+}
+
+function toggleDraftSelection(id: string) {
+	selectedDraftIds = isDraftSelected(id)
+		? selectedDraftIds.filter((item) => item !== id)
+		: [...selectedDraftIds, id];
+}
+
+function toggleAllPosts() {
+	if (busyActionId || posts.length === 0) return;
+	selectedPostIds =
+		selectedPostIds.length === posts.length ? [] : posts.map((item) => item.id);
+}
+
+function toggleAllDrafts() {
+	if (busyActionId || draftTrashItems.length === 0) return;
+	selectedDraftIds =
+		selectedDraftIds.length === draftTrashItems.length
+			? []
+			: draftTrashItems.map((item) => item.id);
+}
+
+function getSelectedPosts(): TrashedPost[] {
+	const selected = new Set(selectedPostIds);
+	return posts.filter((item) => selected.has(item.id));
+}
+
+function getSelectedDrafts(): DevDraftTrashItem[] {
+	const selected = new Set(selectedDraftIds);
+	return draftTrashItems.filter((item) => selected.has(item.id));
+}
+
 async function loadPosts(showLoading = true) {
 	refreshAccess();
 	if (isLocked) {
 		posts = [];
 		postLoadError = "";
+		selectedPostIds = [];
 		return;
 	}
 
@@ -116,6 +177,7 @@ async function loadPosts(showLoading = true) {
 		developerCodeMissing = true;
 		posts = [];
 		postLoadError = "";
+		selectedPostIds = [];
 		return;
 	}
 
@@ -145,11 +207,15 @@ async function loadPosts(showLoading = true) {
 			throw new Error(payload.message || "加载文章垃圾桶失败");
 		}
 		posts = Array.isArray(payload.posts) ? payload.posts : [];
+		selectedPostIds = selectedPostIds.filter((id) =>
+			posts.some((item) => item.id === id),
+		);
 	} catch (error) {
 		const message =
 			error instanceof Error ? error.message : "加载文章垃圾桶失败";
 		postLoadError = message;
 		posts = [];
+		selectedPostIds = [];
 	} finally {
 		loading = false;
 	}
@@ -159,9 +225,13 @@ function loadDraftTrashItems() {
 	refreshAccess();
 	if (isLocked) {
 		draftTrashItems = [];
+		selectedDraftIds = [];
 		return;
 	}
 	draftTrashItems = listDraftTrash();
+	selectedDraftIds = selectedDraftIds.filter((id) =>
+		draftTrashItems.some((item) => item.id === id),
+	);
 }
 
 function requestPassiveRefresh() {
@@ -180,7 +250,10 @@ function flushDeferredRefresh() {
 	loadDraftTrashItems();
 }
 
-async function requestPostAction(action: "restore" | "delete", item: TrashedPost) {
+async function requestPostAction(
+	action: "restore" | "delete",
+	item: TrashedPost,
+) {
 	if (busyActionId) return;
 	const devCodeHash = readDevCode();
 	if (!devCodeHash) {
@@ -224,6 +297,47 @@ async function requestPostAction(action: "restore" | "delete", item: TrashedPost
 	}
 }
 
+async function requestBulkPostDelete(items: TrashedPost[]) {
+	if (busyActionId || items.length < 1) return;
+	const devCodeHash = readDevCode();
+	if (!devCodeHash) {
+		showNotice("缺少开发者口令，请重新解锁开发者模式", "error");
+		return;
+	}
+
+	busyActionId = "post:delete:bulk";
+	try {
+		const response = await fetch("/api/dev/trash", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				action: "delete",
+				postIds: items.map((item) => item.id),
+				devCodeHash,
+			}),
+		});
+		const payload = (await response.json().catch(() => ({}))) as {
+			ok?: boolean;
+			message?: string;
+			count?: number;
+		};
+		if (!response.ok || !payload.ok) {
+			throw new Error(payload.message || "操作失败");
+		}
+		selectedPostIds = [];
+		window.dispatchEvent(new CustomEvent("trash-posts-updated"));
+		showNotice(`已彻底删除 ${payload.count || items.length} 篇文章`, "success");
+		await loadPosts(false);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "操作失败";
+		showNotice(message, "error");
+	} finally {
+		busyActionId = "";
+	}
+}
+
 function requestDraftAction(
 	action: "restore" | "delete",
 	item: DevDraftTrashItem,
@@ -245,6 +359,31 @@ function requestDraftAction(
 			}
 			showNotice(`已彻底删除草稿：${getDraftTitle(item)}`, "success");
 		}
+		loadDraftTrashItems();
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "操作失败";
+		showNotice(message, "error");
+	} finally {
+		busyActionId = "";
+	}
+}
+
+function requestBulkDraftDelete(items: DevDraftTrashItem[]) {
+	if (busyActionId || items.length < 1) return;
+
+	busyActionId = "draft:delete:bulk";
+	try {
+		let removedCount = 0;
+		for (const item of items) {
+			if (removeDraftTrash(item.id)) {
+				removedCount += 1;
+			}
+		}
+		if (removedCount < 1) {
+			throw new Error("没有成功删除任何草稿");
+		}
+		selectedDraftIds = [];
+		showNotice(`已彻底删除 ${removedCount} 篇草稿`, "success");
 		loadDraftTrashItems();
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "操作失败";
@@ -290,6 +429,28 @@ function deleteDraftForever(item: DevDraftTrashItem) {
 	};
 }
 
+function deleteSelectedPosts() {
+	if (busyActionId) return;
+	const items = getSelectedPosts();
+	if (items.length < 1) return;
+	pendingDialogAction = {
+		kind: "post-bulk",
+		action: "delete",
+		items,
+	};
+}
+
+function deleteSelectedDrafts() {
+	if (busyActionId) return;
+	const items = getSelectedDrafts();
+	if (items.length < 1) return;
+	pendingDialogAction = {
+		kind: "draft-bulk",
+		action: "delete",
+		items,
+	};
+}
+
 function closePendingDialog() {
 	if (busyActionId) return;
 	pendingDialogAction = null;
@@ -305,11 +466,25 @@ function confirmPendingDialog() {
 		void requestPostAction(nextAction.action, nextAction.item);
 		return;
 	}
+	if (nextAction.kind === "post-bulk") {
+		void requestBulkPostDelete(nextAction.items);
+		return;
+	}
+	if (nextAction.kind === "draft-bulk") {
+		requestBulkDraftDelete(nextAction.items);
+		return;
+	}
 	requestDraftAction(nextAction.action, nextAction.item);
 }
 
 function getDialogLabel(): string {
 	if (!pendingDialogAction) return "";
+	if (pendingDialogAction.kind === "post-bulk") {
+		return "批量彻底删除";
+	}
+	if (pendingDialogAction.kind === "draft-bulk") {
+		return "批量删除草稿";
+	}
 	if (pendingDialogAction.kind === "draft") {
 		return pendingDialogAction.action === "delete" ? "删除草稿" : "恢复草稿";
 	}
@@ -318,6 +493,12 @@ function getDialogLabel(): string {
 
 function getDialogTitle(): string {
 	if (!pendingDialogAction) return "";
+	if (pendingDialogAction.kind === "post-bulk") {
+		return `确认彻底删除选中的 ${pendingDialogAction.items.length} 篇文章吗？`;
+	}
+	if (pendingDialogAction.kind === "draft-bulk") {
+		return `确认彻底删除选中的 ${pendingDialogAction.items.length} 篇草稿吗？`;
+	}
 	if (pendingDialogAction.kind === "draft") {
 		return pendingDialogAction.action === "delete"
 			? `确认彻底删除《${getDraftTitle(pendingDialogAction.item)}》吗？`
@@ -330,6 +511,12 @@ function getDialogTitle(): string {
 
 function getDialogDescription(): string {
 	if (!pendingDialogAction) return "";
+	if (pendingDialogAction.kind === "post-bulk") {
+		return "删除后这些文章会从垃圾桶中永久消失，不再保留任何备份。";
+	}
+	if (pendingDialogAction.kind === "draft-bulk") {
+		return "删除后这些本地草稿会从当前浏览器的垃圾桶中永久移除，不再保留恢复入口。";
+	}
 	if (pendingDialogAction.kind === "draft") {
 		return pendingDialogAction.action === "delete"
 			? "删除后会从当前浏览器的本地草稿垃圾桶中永久移除，不再保留恢复入口。"
@@ -342,10 +529,22 @@ function getDialogDescription(): string {
 
 function getDialogNote(): string {
 	if (!pendingDialogAction) return "";
-	if (pendingDialogAction.kind === "draft" && pendingDialogAction.action === "restore") {
+	if (
+		pendingDialogAction.kind === "post-bulk" ||
+		pendingDialogAction.kind === "draft-bulk"
+	) {
+		return "";
+	}
+	if (
+		pendingDialogAction.kind === "draft" &&
+		pendingDialogAction.action === "restore"
+	) {
 		return "如果只是误删，现在恢复就能继续接着写。";
 	}
-	if (pendingDialogAction.kind === "post" && pendingDialogAction.action === "restore") {
+	if (
+		pendingDialogAction.kind === "post" &&
+		pendingDialogAction.action === "restore"
+	) {
 		return "如果只是误删，现在恢复就可以。";
 	}
 	return "";
@@ -354,6 +553,12 @@ function getDialogNote(): string {
 function getDialogWarning(): string {
 	if (!pendingDialogAction) return "";
 	if (pendingDialogAction.action !== "delete") return "";
+	if (
+		pendingDialogAction.kind === "post-bulk" ||
+		pendingDialogAction.kind === "draft-bulk"
+	) {
+		return "批量彻底删除后无法恢复，请确认当前选择无误。";
+	}
 	return pendingDialogAction.kind === "draft"
 		? "彻底删除后不会再进入任何垃圾桶，也无法恢复。"
 		: "此操作不可恢复，请再确认一次。";
@@ -361,6 +566,12 @@ function getDialogWarning(): string {
 
 function getDialogConfirmLabel(): string {
 	if (!pendingDialogAction) return "确认";
+	if (
+		pendingDialogAction.kind === "post-bulk" ||
+		pendingDialogAction.kind === "draft-bulk"
+	) {
+		return "确认批量删除";
+	}
 	return pendingDialogAction.action === "delete" ? "确认删除" : "确认恢复";
 }
 
@@ -405,7 +616,10 @@ onMount(() => {
 
 	window.addEventListener("developer-mode-change", handleModeChange);
 	window.addEventListener("trash-posts-updated", handleTrashUpdated);
-	window.addEventListener(DEV_DRAFT_TRASH_UPDATED_EVENT, handleDraftTrashUpdated);
+	window.addEventListener(
+		DEV_DRAFT_TRASH_UPDATED_EVENT,
+		handleDraftTrashUpdated,
+	);
 	window.addEventListener("storage", handleStorage);
 
 	return () => {
@@ -445,6 +659,39 @@ onMount(() => {
 	{:else}
 		<div class="trash-sections">
 			<section class="trash-section">
+				<div class="section-head">
+					<div>
+						<div class="section-title">文章垃圾桶</div>
+						<p class="section-desc">支持多选后批量彻底删除</p>
+					</div>
+					{#if posts.length > 0}
+						<div class="section-toolbar">
+							<label class="select-toggle">
+								<input
+									type="checkbox"
+									checked={posts.length > 0 && selectedPostIds.length === posts.length}
+									disabled={Boolean(busyActionId)}
+									on:change={toggleAllPosts}
+								/>
+								<span>{selectedPostIds.length === posts.length ? "取消全选" : "全选"}</span>
+							</label>
+							<div class="section-actions">
+								<span class="section-count">
+									{selectedPostIds.length > 0
+										? `已选 ${selectedPostIds.length} 项`
+										: `共 ${posts.length} 项`}
+								</span>
+								<button
+									class="action-btn danger soft"
+									disabled={!selectedPostIds.length || Boolean(busyActionId)}
+									on:click={deleteSelectedPosts}
+								>
+									{busyActionId === "post:delete:bulk" ? "批量删除中..." : "批量彻底删除"}
+								</button>
+							</div>
+						</div>
+					{/if}
+				</div>
 				{#if developerCodeMissing}
 					<div class="empty-tip">缺少开发者口令，文章垃圾桶暂时不可用，请重新解锁开发者模式。</div>
 				{:else if loading && posts.length === 0}
@@ -455,6 +702,15 @@ onMount(() => {
 					<div class="trash-list">
 						{#each posts as item}
 							<div class="trash-item">
+								<label class="trash-select">
+									<input
+										type="checkbox"
+										checked={isPostSelected(item.id)}
+										disabled={Boolean(busyActionId)}
+										aria-label={`选择文章 ${getPostTitle(item)}`}
+										on:change={() => togglePostSelection(item.id)}
+									/>
+								</label>
 								<div class="trash-main">
 									<div class="trash-title">{getPostTitle(item)}</div>
 									<div class="trash-meta">
@@ -486,12 +742,54 @@ onMount(() => {
 			</section>
 
 			<section class="trash-section">
+				<div class="section-head">
+					<div>
+						<div class="section-title">本地草稿垃圾桶</div>
+						<p class="section-desc">支持多选后批量彻底删除</p>
+					</div>
+					{#if draftTrashItems.length > 0}
+						<div class="section-toolbar">
+							<label class="select-toggle">
+								<input
+									type="checkbox"
+									checked={draftTrashItems.length > 0 && selectedDraftIds.length === draftTrashItems.length}
+									disabled={Boolean(busyActionId)}
+									on:change={toggleAllDrafts}
+								/>
+								<span>{selectedDraftIds.length === draftTrashItems.length ? "取消全选" : "全选"}</span>
+							</label>
+							<div class="section-actions">
+								<span class="section-count">
+									{selectedDraftIds.length > 0
+										? `已选 ${selectedDraftIds.length} 项`
+										: `共 ${draftTrashItems.length} 项`}
+								</span>
+								<button
+									class="action-btn danger soft"
+									disabled={!selectedDraftIds.length || Boolean(busyActionId)}
+									on:click={deleteSelectedDrafts}
+								>
+									{busyActionId === "draft:delete:bulk" ? "批量删除中..." : "批量彻底删除"}
+								</button>
+							</div>
+						</div>
+					{/if}
+				</div>
 				{#if draftTrashItems.length === 0}
 					<div class="empty-tip">本地草稿垃圾桶是空的。</div>
 				{:else}
 					<div class="trash-list">
 						{#each draftTrashItems as item}
 							<div class="trash-item draft-trash-item">
+								<label class="trash-select">
+									<input
+										type="checkbox"
+										checked={isDraftSelected(item.id)}
+										disabled={Boolean(busyActionId)}
+										aria-label={`选择草稿 ${getDraftTitle(item)}`}
+										on:change={() => toggleDraftSelection(item.id)}
+									/>
+								</label>
 								<div class="trash-main">
 									<div class="trash-title">{getDraftTitle(item)}</div>
 									<div class="trash-meta">
@@ -587,6 +885,36 @@ onMount(() => {
   font-size 0.84rem
   color rgba(148, 163, 184, 0.95)
 
+.section-toolbar
+  display flex
+  align-items center
+  justify-content space-between
+  gap 0.75rem
+  flex-wrap wrap
+
+.section-actions
+  display flex
+  align-items center
+  gap 0.75rem
+  flex-wrap wrap
+
+.select-toggle
+  display inline-flex
+  align-items center
+  gap 0.5rem
+  font-size 0.84rem
+  color var(--btn-content)
+  cursor pointer
+
+  input
+    width 1rem
+    height 1rem
+    accent-color var(--primary)
+
+.section-count
+  font-size 0.8rem
+  color rgba(148, 163, 184, 0.94)
+
 .empty-tip
   border 1px dashed var(--btn-regular-bg-hover)
   border-radius 0.9rem
@@ -615,7 +943,7 @@ onMount(() => {
   border-radius 0.95rem
   padding 0.92rem 1rem
   display grid
-  grid-template-columns minmax(0, 1fr) auto
+  grid-template-columns auto minmax(0, 1fr) auto
   align-items flex-start
   gap 0.9rem
   background unquote('color-mix(in oklab, var(--card-bg) 94%, var(--btn-plain-bg-hover))')
@@ -628,6 +956,18 @@ onMount(() => {
   min-width 0
   display grid
   gap 0.3rem
+
+.trash-select
+  display inline-flex
+  align-items flex-start
+  justify-content center
+  padding-top 0.15rem
+
+  input
+    width 1rem
+    height 1rem
+    accent-color var(--primary)
+    cursor pointer
 
 .trash-title
   font-size 1.02rem
@@ -683,6 +1023,9 @@ onMount(() => {
   border-color rgba(239, 68, 68, 0.75)
   color rgba(239, 68, 68, 0.95)
 
+.action-btn.soft
+  background rgba(239, 68, 68, 0.08)
+
 .notice
   margin-top 0.75rem
   border-radius 0.65rem
@@ -709,11 +1052,21 @@ onMount(() => {
   box-shadow 0 1rem 2.2rem rgba(244, 71, 71, 0.16)
 
 @media (max-width: 760px)
+  .section-toolbar
+    width 100%
+    align-items stretch
+
+  .section-actions
+    width 100%
+    justify-content space-between
+
   .trash-item
-    grid-template-columns 1fr
+    grid-template-columns auto 1fr
 
   .trash-actions
+    grid-column 1 / -1
     width 100%
+    padding-left 1.9rem
 
   .action-btn
     flex 1
