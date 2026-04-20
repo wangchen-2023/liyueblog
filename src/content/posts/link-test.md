@@ -10,4 +10,4 @@ draft: false
 ---
 
 [li](https://liyueovo.top/)
-[test](https://bilibili.com)
+[B站 耶~](https://bilibili.com)
