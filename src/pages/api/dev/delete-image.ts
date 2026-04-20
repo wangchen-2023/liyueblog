@@ -60,6 +60,12 @@ function normalizeEditorUploadRepoPathFromInput(input: string): string | null {
 		return null;
 	}
 
+	const embeddedPublicMarker = "/public/uploads/editor/";
+	const embeddedPublicIndex = pathname.indexOf(embeddedPublicMarker);
+	if (embeddedPublicIndex >= 0) {
+		return pathname.slice(embeddedPublicIndex + 1);
+	}
+
 	if (pathname.startsWith("public/uploads/editor/")) {
 		return pathname;
 	}
@@ -239,4 +245,3 @@ export const GET: APIRoute = async () => {
 		message: "Use POST to delete uploaded editor image files.",
 	});
 };
-

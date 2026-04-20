@@ -2051,6 +2051,11 @@ function normalizeEditorUploadRepoPathFromUrl(raw: string): string {
 		// Keep raw value when decode fails.
 	}
 	if (pathname.includes("..")) return "";
+	const embeddedPublicMarker = "/public/uploads/editor/";
+	const embeddedPublicIndex = pathname.indexOf(embeddedPublicMarker);
+	if (embeddedPublicIndex >= 0) {
+		return pathname.slice(embeddedPublicIndex + 1);
+	}
 	if (pathname.startsWith("public/uploads/editor/")) return pathname;
 	if (pathname.startsWith("/uploads/editor/")) return `public${pathname}`;
 	return "";
@@ -3483,6 +3488,16 @@ async function requestDeleteEditorImageAsset(
 async function isUploadedImageReachable(url: string): Promise<boolean> {
 	const safeUrl = toEditorSafeImageUrl(url);
 	if (!safeUrl) return false;
+	try {
+		const parsed = new URL(safeUrl, window.location.origin);
+		if (parsed.origin !== window.location.origin) {
+			// Cross-origin images can be blocked by CORS for fetch checks.
+			// Trust backend upload result and let editor render directly.
+			return true;
+		}
+	} catch {
+		// Ignore parse errors and fallback to fetch probes.
+	}
 	for (let i = 0; i < IMAGE_URL_VERIFY_RETRIES; i += 1) {
 		try {
 			const head = await fetch(safeUrl, {

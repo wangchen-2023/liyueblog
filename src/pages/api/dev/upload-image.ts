@@ -86,6 +86,19 @@ function encodeGitHubPath(path: string): string {
 		.join("/");
 }
 
+function buildGitHubRawFileUrl(params: {
+	owner: string;
+	repo: string;
+	branch: string;
+	repoPath: string;
+}): string {
+	const encodedRepoPath = params.repoPath
+		.split("/")
+		.map((part) => encodeURIComponent(part))
+		.join("/");
+	return `https://raw.githubusercontent.com/${encodeURIComponent(params.owner)}/${encodeURIComponent(params.repo)}/${encodeURIComponent(params.branch)}/${encodedRepoPath}`;
+}
+
 async function writeRepoBinaryFile(params: {
 	githubBase: string;
 	path: string;
@@ -227,7 +240,13 @@ export const POST: APIRoute = async ({ request }) => {
 		return json(200, {
 			ok: true,
 			path: repoPath,
-			url: publicUrl,
+			url: buildGitHubRawFileUrl({
+				owner: githubOwner,
+				repo: githubRepo,
+				branch: githubBranch,
+				repoPath,
+			}),
+			publicUrl,
 			commitUrl,
 		});
 	} catch (error) {
