@@ -114,8 +114,24 @@ function isDevEditorEnabled() {
         }
 
         if (sessionStorage.getItem(DEV_EDITOR_SESSION_KEY) !== "true") {
-            disableDevEditor();
-            return false;
+            const graceUntilRaw = localStorage.getItem(DEV_EDITOR_SESSION_GRACE_UNTIL_KEY);
+            const graceUntil = graceUntilRaw ? Number.parseInt(graceUntilRaw, 10) : NaN;
+            const hasGrace = Number.isFinite(graceUntil) && graceUntil > Date.now();
+            const credential =
+                (localStorage.getItem(DEV_EDITOR_CREDENTIAL_KEY) || "").trim() ||
+                (localStorage.getItem(DEV_EDITOR_LEGACY_CODE_KEY) || "").trim();
+
+            if (hasGrace && credential) {
+                try {
+                    sessionStorage.setItem(DEV_EDITOR_SESSION_KEY, "true");
+                } catch (_error) {
+                    disableDevEditor();
+                    return false;
+                }
+            } else {
+                disableDevEditor();
+                return false;
+            }
         }
 
         const autoLockAtRaw = localStorage.getItem(DEV_EDITOR_AUTO_LOCK_AT_KEY);
