@@ -1,0 +1,87 @@
+:root {
+    --swup-duration: 280ms;
+    --swup-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --swup-translate: 16px;
+    --swup-overlay: 0.12;
+}
+
+/* Swup cross‑fade + slight lift (matches the reference video) */
+.transition-swup-fade {
+    transition-property: opacity, transform;
+    transition-duration: var(--swup-duration);
+    transition-timing-function: var(--swup-ease);
+    will-change: opacity, transform;
+}
+
+html.is-animating .transition-swup-fade {
+    opacity: 0;
+    transform: translateY(var(--swup-translate));
+}
+
+html.is-changing .transition-swup-fade {
+    pointer-events: none;
+}
+
+/* Fade-in animations for components */
+@keyframes fade-in-up {
+    0% {
+        transform: translateY(1.1rem);
+        opacity: 0;
+    }
+    100% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Main components */
+.onload-animation {
+    opacity: 0;
+    animation: 280ms fade-in-up;
+    animation-timing-function: var(--swup-ease);
+    animation-fill-mode: forwards;
+}
+#swup-container {
+    outline: none;
+}
+#content-wrapper {
+    will-change: opacity, transform;
+    animation-delay: var(--content-delay);
+}
+
+html.post-nav-scrolling #navbar-wrapper,
+html.post-nav-visit #navbar-wrapper {
+    opacity: 1 !important;
+    transform: none !important;
+}
+
+html.post-nav-visit .onload-animation {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+}
+.footer {
+    animation-delay: 250ms;
+}
+#banner-credit {
+    animation-delay: 400ms;
+}
+
+/* Post content */
+#post-container :nth-child(1) { animation-delay: calc(var(--content-delay) + 0ms) }
+#post-container :nth-child(2) { animation-delay: calc(var(--content-delay) + 50ms) }
+#post-container :nth-child(3) { animation-delay: calc(var(--content-delay) + 100ms) }
+#post-container :nth-child(4) { animation-delay: calc(var(--content-delay) + 175ms) }
+#post-container :nth-child(5) { animation-delay: calc(var(--content-delay) + 250ms) }
+#post-container :nth-child(6) { animation-delay: calc(var(--content-delay) + 325ms) }
+
+@media (prefers-reduced-motion: reduce) {
+    .transition-swup-fade {
+        transition: none;
+        transform: none !important;
+    }
+    html::before {
+        transition: none;
+        opacity: 0 !important;
+    }
+}

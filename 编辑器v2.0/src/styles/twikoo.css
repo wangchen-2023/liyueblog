@@ -1,0 +1,415 @@
+:root {
+  --tk-text: #111827;
+  --tk-muted: #6b7280;
+  --tk-line: rgba(107, 114, 128, 0.28);
+  --tk-line-soft: rgba(107, 114, 128, 0.18);
+  --tk-card-bg: rgba(255, 255, 255, 0.75);
+  --tk-card-bg-soft: rgba(255, 255, 255, 0.48);
+  --tk-input-bg: rgba(255, 255, 255, 0.7);
+  --tk-input-label-bg: rgba(255, 255, 255, 0.52);
+  --tk-chip-bg: rgba(255, 255, 255, 0.64);
+  --tk-expand-text: rgba(255, 255, 255, 0.95);
+  --tk-shadow: 0 10px 28px rgba(15, 23, 42, 0.1);
+  --tk-shadow-hover: 0 14px 36px rgba(15, 23, 42, 0.16);
+  --code-block-text: #d1d5db;
+}
+
+html.dark {
+  --tk-text: #e5e7eb;
+  --tk-muted: #9ca3af;
+  --tk-line: rgba(148, 163, 184, 0.24);
+  --tk-line-soft: rgba(148, 163, 184, 0.16);
+  --tk-card-bg: rgba(18, 22, 34, 0.78);
+  --tk-card-bg-soft: rgba(18, 22, 34, 0.6);
+  --tk-input-bg: rgba(53, 60, 79, 0.6);
+  --tk-input-label-bg: rgba(15, 20, 32, 0.62);
+  --tk-chip-bg: rgba(17, 22, 34, 0.75);
+  --tk-expand-text: rgba(248, 250, 252, 0.96);
+  --tk-shadow: 0 12px 26px rgba(2, 6, 23, 0.34);
+  --tk-shadow-hover: 0 16px 36px rgba(2, 6, 23, 0.44);
+}
+
+.tk-comments {
+  color: var(--tk-text);
+}
+
+.tk-submit {
+  margin-bottom: 1.25rem;
+}
+
+.tk-submit .tk-avatar {
+  display: none;
+}
+
+.tk-submit .tk-row .tk-col {
+  flex-direction: column-reverse;
+}
+
+.tk-submit .tk-row .tk-col .tk-input {
+  position: relative;
+}
+
+.tk-submit .tk-row .tk-col .tk-input textarea {
+  min-height: 158px !important;
+  resize: vertical;
+  border: 1px solid var(--tk-line) !important;
+  border-radius: 1rem;
+  background: var(--tk-input-bg) !important;
+  color: var(--tk-text) !important;
+  padding: 1.05rem 1.2rem 3rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.tk-submit .tk-row .tk-col .tk-input textarea:focus {
+  border-color: var(--primary) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--primary) 35%, transparent),
+    0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
+.tk-submit .tk-row .tk-col .tk-input textarea::placeholder {
+  color: color-mix(in oklab, var(--tk-muted) 82%, transparent);
+}
+
+.tk-submit .tk-row.actions {
+  width: 100%;
+  margin: 0.72rem 0 0 !important;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.tk-submit .tk-row.actions .__markdown {
+  display: none !important;
+}
+
+.tk-submit .tk-row.actions .tk-row-actions-start,
+.tk-submit .tk-row .tk-col .tk-input > .tk-row-actions-start {
+  margin-right: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tk-submit .tk-row.actions .tk-submit-action-icon,
+.tk-submit .tk-row .tk-col .tk-input .tk-submit-action-icon {
+  color: var(--tk-muted);
+}
+
+.tk-submit .tk-row .tk-col .tk-input > .tk-row-actions-start {
+  position: absolute;
+  left: 0.85rem;
+  bottom: 0.65rem;
+  margin-right: 0;
+  z-index: 2;
+  border: 1px solid var(--tk-line-soft);
+  border-radius: 0.72rem;
+  padding: 0.18rem 0.24rem;
+  background: color-mix(in oklab, var(--tk-card-bg-soft) 86%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.tk-submit .tk-row .tk-col .tk-input > .tk-row-actions-start .tk-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.55rem;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.tk-submit .tk-row .tk-col .tk-input > .tk-row-actions-start .tk-icon:hover {
+  color: var(--tk-text);
+  background: color-mix(in oklab, var(--primary) 18%, transparent);
+}
+.tk-submit .tk-row.actions .tk-preview,
+.tk-submit .tk-row.actions .tk-cancel,
+.tk-submit .tk-row.actions .tk-send {
+  border: 1px solid var(--tk-line) !important;
+  border-radius: 0.95rem;
+  height: 2.6rem;
+  padding: 0 1rem;
+  background: var(--tk-card-bg-soft) !important;
+  color: var(--tk-text) !important;
+  font-weight: 700;
+  transition: transform 120ms ease, border-color 120ms ease, filter 120ms ease;
+}
+
+.tk-submit .tk-row.actions .tk-preview:hover,
+.tk-submit .tk-row.actions .tk-cancel:hover,
+.tk-submit .tk-row.actions .tk-send:hover {
+  border-color: color-mix(in oklab, var(--primary) 40%, var(--tk-line));
+}
+
+.tk-submit .tk-row.actions .tk-send {
+  border-color: color-mix(in oklab, var(--primary) 35%, var(--tk-line)) !important;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--primary) 84%, #6c63ff),
+    color-mix(in oklab, var(--primary) 74%, #5b54e6)
+  ) !important;
+  color: var(--tk-expand-text) !important;
+}
+
+.tk-submit .tk-row.actions .tk-send:disabled {
+  opacity: 0.65;
+}
+
+.tk-submit .tk-row.actions .tk-preview:active,
+.tk-submit .tk-row.actions .tk-cancel:active,
+.tk-submit .tk-row.actions .tk-send:active {
+  transform: scale(0.985);
+}
+
+.tk-meta-input {
+  margin-top: 0.65rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.tk-meta-input > div {
+  min-height: 2.8rem;
+}
+
+.tk-meta-input .el-input-group__prepend {
+  min-height: inherit;
+  min-width: 5.3rem;
+  border-radius: 0.85rem 0 0 0.85rem !important;
+  border: 1px solid var(--tk-line) !important;
+  border-right: 0 !important;
+  background: var(--tk-input-label-bg) !important;
+  color: var(--tk-text) !important;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.tk-meta-input input {
+  min-height: inherit;
+  border: 1px solid var(--tk-line) !important;
+  border-left: 0 !important;
+  border-radius: 0 0.85rem 0.85rem 0 !important;
+  background: var(--tk-input-bg) !important;
+  color: var(--tk-text) !important;
+  padding: 0 0.95rem;
+}
+
+.tk-meta-input input:focus {
+  border-color: var(--primary) !important;
+}
+
+@media (max-width: 960px) {
+  .tk-meta-input {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .tk-meta-input {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tk-comment {
+  border: 1px solid var(--tk-line);
+  border-radius: 1.15rem;
+  background: linear-gradient(165deg, var(--tk-card-bg) 0%, var(--tk-card-bg-soft) 100%);
+  padding: 1.1rem 1.2rem;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+  box-shadow: var(--tk-shadow);
+  backdrop-filter: blur(8px);
+}
+
+.tk-comment:hover {
+  border-color: color-mix(in oklab, var(--primary) 35%, var(--tk-line));
+  box-shadow: var(--tk-shadow-hover);
+}
+
+.tk-main > .tk-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.tk-avatar-img {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--tk-line-soft);
+}
+
+.tk-nick {
+  color: var(--primary) !important;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.tk-time {
+  color: var(--tk-muted);
+  font-weight: 650;
+  font-size: 0.9rem;
+}
+
+.tk-content {
+  margin-top: 0.45rem;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--tk-text);
+  font-weight: 680;
+  word-break: break-word;
+}
+
+.tk-content .tk-ruser {
+  text-decoration: none;
+  color: color-mix(in oklab, var(--primary) 82%, var(--tk-text));
+}
+
+.tk-content a,
+.tk-preview-container a {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: 0.25rem;
+}
+
+.tk-content a:hover,
+.tk-preview-container a:hover {
+  text-decoration-color: var(--link-hover);
+}
+
+.tk-content :not(pre) > code,
+.tk-preview-container :not(pre) > code {
+  border-radius: 0.45rem;
+  background: var(--inline-code-bg);
+  color: var(--inline-code-color);
+  padding: 0.1rem 0.32rem;
+  font-weight: 700;
+}
+
+.tk-extras {
+  margin-top: 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.tk-extra {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--tk-line-soft);
+  border-radius: 0.72rem;
+  background: var(--tk-chip-bg);
+  padding: 0.24rem 0.54rem;
+  line-height: 1.2;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.tk-extra .tk-icon {
+  display: none;
+}
+
+.tk-extra-text {
+  font-size: 0.83rem;
+  color: var(--tk-muted);
+  font-weight: 700;
+}
+
+.tk-action .tk-action-icon svg {
+  fill: var(--primary);
+}
+
+.tk-action .tk-action-count {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.tk-action .tk-action-link:hover {
+  filter: brightness(1.08);
+}
+
+.tk-replies {
+  margin-top: 0.95rem;
+  padding-top: 0.95rem;
+  border-top: 1px dashed var(--tk-line-soft);
+  padding-left: 0.45rem;
+  transition: max-height 220ms ease, opacity 220ms ease, padding-top 220ms ease, margin-top 220ms ease, border-top-color 220ms ease;
+}
+
+.tk-replies .tk-comment {
+  margin-top: 0.78rem;
+  background: color-mix(in oklab, var(--tk-card-bg-soft) 88%, transparent);
+  border-color: var(--tk-line-soft);
+}
+
+.tk-replies .tk-comment .tk-content {
+  font-size: 0.96rem;
+  font-weight: 650;
+}
+
+.tk-replies-manual-collapsed {
+  max-height: 0;
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  border-top-color: transparent !important;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.tk-expand {
+  margin-top: 0.95rem;
+  border-radius: 0.95rem;
+  height: 3rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in oklab, var(--primary) 82%, #6d68d6);
+  border: 1px solid color-mix(in oklab, var(--primary) 55%, transparent);
+  color: var(--tk-expand-text);
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 140ms ease, filter 140ms ease, opacity 140ms ease;
+}
+
+.tk-expand:hover {
+  filter: brightness(1.04);
+}
+
+.tk-expand:active {
+  transform: scale(0.985);
+}
+
+.tk-expand._collapse {
+  background: color-mix(in oklab, var(--tk-card-bg-soft) 86%, transparent);
+  border-color: var(--tk-line);
+  color: var(--tk-muted);
+}
+
+.twikoo .code-block pre {
+  border-radius: 0.75rem !important;
+}
+
+.twikoo .code-block pre:not([class]) {
+  background: #2d2d2d;
+  overflow: auto;
+  padding: 0.5rem;
+  color: var(--code-block-text);
+}
+
+.twikoo .code-block .copy-btn-icon {
+  width: inherit !important;
+  height: inherit !important;
+}
+
+.card-base {
+  overflow: visible;
+}
