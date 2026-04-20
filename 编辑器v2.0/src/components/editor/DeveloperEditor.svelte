@@ -5186,7 +5186,7 @@ onMount(() => {
   --editor-code-preview-bg rgba(16, 28, 40, 0.98)
   --editor-code-preview-border rgba(118, 168, 225, 0.66)
   --editor-code-preview-text rgba(226, 241, 255, 0.99)
-  --editor-link-color #000000
+  --editor-link-color #ffffff
   --editor-link-underline-color rgba(96, 165, 250, 0.5)
   --editor-bold-bg #1d3952
   --editor-bold-color #9bc8f4
@@ -6882,9 +6882,9 @@ onMount(() => {
   width calc(100vw - 1.25rem) !important
   max-width 24.2rem !important
   border-radius 1.05rem !important
-  border 1px solid rgba(130, 177, 166, 0.5) !important
-  background rgba(242, 247, 245, 0.98) !important
-  box-shadow 0 16px 34px rgba(17, 40, 40, 0.16) !important
+  border 1px solid var(--editor-popup-border) !important
+  background var(--editor-popup-bg) !important
+  box-shadow 0 16px 34px var(--editor-tooltip-shadow) !important
 
 :global(.toastui-editor-popup-add-link .toastui-editor-popup-body)
   padding 1.06rem 1.06rem 0.96rem !important
@@ -6901,18 +6901,18 @@ onMount(() => {
   line-height 1.24
   font-weight 650 !important
   letter-spacing 0.01em
-  color rgba(33, 56, 62, 0.96) !important
+  color var(--editor-popup-text) !important
   font-family var(--editor-popup-font-family) !important
 
 :global(.toastui-editor-popup-add-link .toastui-editor-popup-body input[type='text'])
   height 2.5rem !important
   border-radius 0.66rem !important
-  border 1px solid rgba(157, 196, 186, 0.82) !important
-  background rgba(236, 244, 241, 0.98) !important
+  border 1px solid var(--editor-popup-input-border) !important
+  background var(--editor-popup-input-bg) !important
   padding 0 0.78rem !important
   font-size 0.92rem !important
   font-weight 500 !important
-  color rgba(33, 56, 62, 0.96) !important
+  color var(--editor-popup-text) !important
   letter-spacing 0.005em
   font-family var(--editor-popup-font-family) !important
   transition border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease
@@ -6935,42 +6935,43 @@ onMount(() => {
   transition background-color 0.16s ease, border-color 0.16s ease
 
 :global(.toastui-editor-popup-add-link .toastui-editor-close-button)
-  border 1px solid rgba(157, 196, 186, 0.9) !important
-  background rgba(233, 242, 239, 1) !important
-  color rgba(42, 64, 66, 0.98) !important
+  border 1px solid var(--editor-popup-input-border) !important
+  background var(--editor-popup-cancel-bg) !important
+  color var(--editor-popup-text) !important
 
 :global(.toastui-editor-popup-add-link .toastui-editor-close-button:hover)
-  border-color rgba(106, 163, 149, 0.92) !important
-  background rgba(228, 240, 236, 1) !important
+  border-color var(--editor-popup-accent) !important
+  background var(--editor-popup-input-bg) !important
 
 :global(.toastui-editor-popup-add-link .toastui-editor-ok-button)
-  border 1px solid rgba(47, 150, 127, 0.94) !important
-  background rgba(45, 154, 133, 1) !important
+  border 1px solid var(--editor-popup-accent) !important
+  background var(--editor-popup-accent) !important
   color rgba(255, 255, 255, 0.99) !important
 
 :global(.toastui-editor-popup-add-link .toastui-editor-ok-button:hover)
   filter none
-  background rgba(39, 136, 115, 1) !important
+  background var(--editor-popup-accent) !important
+  opacity 0.9
 
 :global(.toastui-editor-popup-add-link .toastui-editor-popup-body input[type='text']:focus)
-  border-color rgba(61, 152, 132, 0.95) !important
-  background rgba(255, 255, 255, 1) !important
-  box-shadow 0 0 0 3px rgba(61, 152, 132, 0.18) !important
+  border-color var(--editor-popup-accent) !important
+  background var(--editor-popup-input-bg) !important
+  box-shadow 0 0 0 3px var(--editor-popup-accent-soft) !important
   outline none !important
 
 :global(.toastui-editor-popup-add-image .toastui-editor-tabs)
   margin -0.12rem 0 0.92rem !important
   display flex !important
   gap 0.28rem !important
-  border-bottom 1px solid rgba(163, 202, 192, 0.76) !important
+  border-bottom 1px solid var(--editor-popup-input-border) !important
 
 :global(.toastui-editor-popup-add-image)
   width calc(100vw - 1.25rem) !important
   max-width 24.2rem !important
   border-radius 1rem !important
-  border 1px solid rgba(130, 177, 166, 0.5) !important
-  background rgba(242, 247, 245, 0.98) !important
-  box-shadow 0 16px 34px rgba(17, 40, 40, 0.16) !important
+  border 1px solid var(--editor-popup-border) !important
+  background var(--editor-popup-bg) !important
+  box-shadow 0 16px 34px var(--editor-tooltip-shadow) !important
 
 :global(.toastui-editor-popup-add-image .toastui-editor-popup-body)
   padding 1.06rem 1.06rem 0.96rem !important
@@ -6982,7 +6983,7 @@ onMount(() => {
   line-height 1.24
   font-weight 650 !important
   letter-spacing 0.01em
-  color rgba(33, 56, 62, 0.96) !important
+  color var(--editor-popup-text) !important
   font-family var(--editor-popup-font-family) !important
 
 :global(.toastui-editor-popup-add-image .toastui-editor-tabs .tab-item)
@@ -6991,22 +6992,22 @@ onMount(() => {
   margin 0 !important
   border none !important
   border-radius 0.62rem 0.62rem 0 0 !important
-  color rgba(90, 111, 111, 0.96) !important
+  color var(--editor-popup-text-dim) !important
   background transparent !important
   font-weight 620 !important
   font-family var(--editor-popup-font-family) !important
 
 :global(.toastui-editor-popup-add-image .toastui-editor-tabs .tab-item.active)
-  color rgba(43, 136, 116, 0.98) !important
-  background rgba(211, 231, 224, 0.98) !important
-  border-bottom 2px solid rgba(43, 136, 116, 0.92) !important
+  color var(--editor-popup-accent) !important
+  background var(--editor-popup-tab-active-bg) !important
+  border-bottom 2px solid var(--editor-popup-accent) !important
 
 :global(.toastui-editor-popup-add-image .toastui-editor-file-name)
   height 2.5rem !important
   border-radius 0.66rem !important
-  border 1px solid rgba(157, 196, 186, 0.82) !important
-  background rgba(236, 244, 241, 0.98) !important
-  color rgba(110, 142, 137, 0.95) !important
+  border 1px solid var(--editor-popup-input-border) !important
+  background var(--editor-popup-input-bg) !important
+  color var(--editor-popup-placeholder) !important
   text-align center !important
   line-height 2.5rem !important
   padding 0 !important
@@ -7015,9 +7016,9 @@ onMount(() => {
 :global(.toastui-editor-popup-add-image .toastui-editor-file-select-button)
   height 2.5rem !important
   border-radius 0.66rem !important
-  border 1px solid rgba(157, 196, 186, 0.9) !important
-  background rgba(233, 242, 239, 1) !important
-  color rgba(42, 64, 66, 0.98) !important
+  border 1px solid var(--editor-popup-input-border) !important
+  background var(--editor-popup-cancel-bg) !important
+  color var(--editor-popup-text) !important
   font-size 0.9rem !important
   font-weight 620 !important
   font-family var(--editor-popup-font-family) !important
@@ -7025,25 +7026,25 @@ onMount(() => {
   transition background-color 0.16s ease, border-color 0.16s ease
 
 :global(.toastui-editor-popup-add-image .toastui-editor-file-select-button:hover)
-  border-color rgba(106, 163, 149, 0.92) !important
-  background rgba(228, 240, 236, 1) !important
+  border-color var(--editor-popup-accent) !important
+  background var(--editor-popup-input-bg) !important
 
 :global(.toastui-editor-popup-add-image .toastui-editor-popup-body input[type='text'])
   height 2.5rem !important
   border-radius 0.66rem !important
-  border 1px solid rgba(157, 196, 186, 0.82) !important
-  background rgba(236, 244, 241, 0.98) !important
+  border 1px solid var(--editor-popup-input-border) !important
+  background var(--editor-popup-input-bg) !important
   padding 0 0.78rem !important
   font-size 0.92rem !important
   font-weight 500 !important
-  color rgba(33, 56, 62, 0.96) !important
+  color var(--editor-popup-text) !important
   letter-spacing 0.005em
   font-family var(--editor-popup-font-family) !important
 
 :global(.toastui-editor-popup-add-image .toastui-editor-popup-body input[type='text']:focus)
-  border-color rgba(61, 152, 132, 0.95) !important
-  background rgba(255, 255, 255, 1) !important
-  box-shadow 0 0 0 3px rgba(61, 152, 132, 0.18) !important
+  border-color var(--editor-popup-accent) !important
+  background var(--editor-popup-input-bg) !important
+  box-shadow 0 0 0 3px var(--editor-popup-accent-soft) !important
   outline none !important
 
 :global(.toastui-editor-popup-add-image .toastui-editor-button-container)
@@ -7064,22 +7065,23 @@ onMount(() => {
   transition background-color 0.16s ease, border-color 0.16s ease
 
 :global(.toastui-editor-popup-add-image .toastui-editor-close-button)
-  border 1px solid rgba(157, 196, 186, 0.9) !important
-  background rgba(233, 242, 239, 1) !important
-  color rgba(42, 64, 66, 0.98) !important
+  border 1px solid var(--editor-popup-input-border) !important
+  background var(--editor-popup-cancel-bg) !important
+  color var(--editor-popup-text) !important
 
 :global(.toastui-editor-popup-add-image .toastui-editor-close-button:hover)
-  border-color rgba(106, 163, 149, 0.92) !important
-  background rgba(228, 240, 236, 1) !important
+  border-color var(--editor-popup-accent) !important
+  background var(--editor-popup-input-bg) !important
 
 :global(.toastui-editor-popup-add-image .toastui-editor-ok-button)
-  border 1px solid rgba(47, 150, 127, 0.94) !important
-  background rgba(45, 154, 133, 1) !important
+  border 1px solid var(--editor-popup-accent) !important
+  background var(--editor-popup-accent) !important
   color rgba(255, 255, 255, 0.99) !important
 
 :global(.toastui-editor-popup-add-image .toastui-editor-ok-button:hover)
   filter none
-  background rgba(39, 136, 115, 1) !important
+  background var(--editor-popup-accent) !important
+  opacity 0.9
 
 :global(.toastui-editor-popup-add-heading ul li)
   padding 4px 10px !important
