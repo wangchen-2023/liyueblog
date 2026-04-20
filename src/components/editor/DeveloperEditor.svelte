@@ -3403,6 +3403,52 @@ function extractUploadErrorMessage(payload: unknown): string {
 	return "图片上传失败";
 }
 
+function encodeRepoPathForRawUrl(path: string): string {
+	return path
+		.split("/")
+		.map((part) => encodeURIComponent(part))
+		.join("/");
+}
+
+function buildGitHubRawUrlFromCommit(
+	commitUrl: string,
+	repoPath: string,
+): string | null {
+	const normalizedCommitUrl = (commitUrl || "").trim();
+	const normalizedRepoPath = (repoPath || "").trim();
+	if (!normalizedCommitUrl || !normalizedRepoPath) return null;
+	const commitMatch = normalizedCommitUrl.match(
+		/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/commit\/([a-f0-9]{7,40})/i,
+	);
+	if (!commitMatch) return null;
+	const owner = commitMatch[1];
+	const repo = commitMatch[2];
+	const sha = commitMatch[3];
+	const encodedPath = encodeRepoPathForRawUrl(normalizedRepoPath);
+	return `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(sha)}/${encodedPath}`;
+}
+
+function resolveUploadedImageUrl(result: unknown): string {
+	if (!result || typeof result !== "object") return "";
+	const payload = result as {
+		url?: unknown;
+		rawUrl?: unknown;
+		path?: unknown;
+		commitUrl?: unknown;
+	};
+	const rawUrl =
+		typeof payload.rawUrl === "string" ? payload.rawUrl.trim() : "";
+	if (rawUrl) return rawUrl;
+	const url = typeof payload.url === "string" ? payload.url.trim() : "";
+	const path = typeof payload.path === "string" ? payload.path.trim() : "";
+	const commitUrl =
+		typeof payload.commitUrl === "string" ? payload.commitUrl.trim() : "";
+	if (url && !url.startsWith("/uploads/editor/")) return url;
+	const commitRawUrl = buildGitHubRawUrlFromCommit(commitUrl, path);
+	if (commitRawUrl) return commitRawUrl;
+	return url;
+}
+
 async function requestEditorImageUpload(blob: Blob): Promise<{ url: string }> {
 	const devCodeHash = getStoredDevCredentialValue();
 	if (!devCodeHash) {
@@ -3423,12 +3469,9 @@ async function requestEditorImageUpload(blob: Blob): Promise<{ url: string }> {
 		result !== null &&
 		"ok" in result &&
 		Boolean((result as { ok?: unknown }).ok);
-	const url =
-		typeof result === "object" && result !== null && "url" in result
-			? (result as { url?: unknown }).url
-			: undefined;
+	const url = resolveUploadedImageUrl(result);
 
-	if (!response.ok || !ok || typeof url !== "string" || !url) {
+	if (!response.ok || !ok || !url) {
 		const message = extractUploadErrorMessage(result);
 		const error = new Error(message) as Error & { status?: number };
 		error.status = response.status;
