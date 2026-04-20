@@ -10,4 +10,5 @@ draft: false
 ---
 
 [li](https://liyueovo.top/)
-[test](http://localhost:4321/drafts)
+[B站 耶~](https://bilibili.com)
+

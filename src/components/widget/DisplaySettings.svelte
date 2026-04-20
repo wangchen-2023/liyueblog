@@ -325,6 +325,17 @@ async function submitDeveloperCode() {
 	}
 }
 
+function handleDeveloperCodeKeydown(event: KeyboardEvent) {
+	if (event.key !== "Enter" && event.key !== "NumpadEnter") {
+		return;
+	}
+	if (event.isComposing) {
+		return;
+	}
+	event.preventDefault();
+	void submitDeveloperCode();
+}
+
 function resetHue() {
 	hue = getDefaultHue();
 }
@@ -655,11 +666,7 @@ $: backgroundTypeLabel = currentBackground
             placeholder={developerModeEnabled ? "已解锁，可继续写作" : "输入开发口令，按回车解锁"}
             bind:value={developerCodeInput}
             on:input={scheduleTypingCodeVerify}
-            on:keydown={(event) => {
-                if (event.key === "Enter") {
-                    void submitDeveloperCode();
-                }
-            }}
+            on:keydown={handleDeveloperCodeKeydown}
         />
     </div>
 </div>

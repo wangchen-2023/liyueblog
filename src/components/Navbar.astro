@@ -93,12 +93,17 @@ const DEV_EDITOR_CREDENTIAL_KEY = "devEditorCredential";
 const DEV_EDITOR_LEGACY_CODE_KEY = "devEditorCode";
 const DEV_EDITOR_AUTO_LOCK_AT_KEY = "devEditorAutoLockAt";
 const DEV_EDITOR_SESSION_KEY = "devEditorSessionActive";
+const DEV_EDITOR_SESSION_GRACE_UNTIL_KEY = "devEditorSessionGraceUntil";
 
 function disableDevEditor() {
     localStorage.setItem(DEV_EDITOR_KEY, "false");
     localStorage.removeItem(DEV_EDITOR_CREDENTIAL_KEY);
     localStorage.removeItem(DEV_EDITOR_LEGACY_CODE_KEY);
     localStorage.removeItem(DEV_EDITOR_AUTO_LOCK_AT_KEY);
+    localStorage.removeItem(DEV_EDITOR_SESSION_GRACE_UNTIL_KEY);
+    try {
+        sessionStorage.removeItem(DEV_EDITOR_SESSION_KEY);
+    } catch (_error) {}
     window.dispatchEvent(new CustomEvent("developer-mode-change", { detail: false }));
 }
 
