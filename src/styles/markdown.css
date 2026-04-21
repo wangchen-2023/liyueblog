@@ -37,7 +37,7 @@
     code {
         @apply bg-[var(--inline-code-bg)] text-[var(--inline-code-color)] px-1 py-0.5 rounded-md overflow-hidden;
 
-        font-family: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
+        font-family: 'KeinannMaruPOP', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
         &:before {
             content:none;
         }
@@ -111,6 +111,11 @@
         ::selection {
             @apply bg-[var(--codeblock-selection)];
         }
+    }
+    .expressive-code [data-language]::before {
+        color: var(--btn-content, oklch(0.55 0.12 var(--hue))) !important;
+        background: var(--btn-regular-bg, oklch(0.95 0.025 var(--hue))) !important;
+        border: 1px solid color-mix(in oklab, var(--btn-content, currentColor) 24%, transparent);
     }
 
 
