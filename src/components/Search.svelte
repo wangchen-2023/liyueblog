@@ -64,6 +64,24 @@ const refreshDeveloperMode = () => {
 	developerModeEnabled = getDeveloperModeEnabled();
 };
 
+const normalizeSearchResultUrl = (rawUrl: string): string => {
+	if (!rawUrl) return rawUrl;
+
+	const normalizedFallback = rawUrl.replace(/^\/client(?=\/posts\/)/i, "");
+
+	if (typeof window === "undefined") {
+		return normalizedFallback;
+	}
+
+	try {
+		const parsed = new URL(rawUrl, window.location.origin);
+		const normalizedPath = parsed.pathname.replace(/^\/client(?=\/posts\/)/i, "");
+		return `${normalizedPath}${parsed.search}${parsed.hash}`;
+	} catch {
+		return normalizedFallback;
+	}
+};
+
 const search = async (keyword: string, isDesktop: boolean): Promise<void> => {
 	if (!keyword) {
 		setPanelVisibility(false, isDesktop);
@@ -86,6 +104,10 @@ const search = async (keyword: string, isDesktop: boolean): Promise<void> => {
 			searchResults = await Promise.all(
 				response.results.map((item) => item.data()),
 			);
+			searchResults = searchResults.map((item) => ({
+				...item,
+				url: normalizeSearchResultUrl(item.url),
+			}));
 
 			if (searchResults.length === 0) {
 				const fallbackKeyword = getCjkFallbackKeyword(normalizedKeyword);
@@ -95,6 +117,10 @@ const search = async (keyword: string, isDesktop: boolean): Promise<void> => {
 					searchResults = await Promise.all(
 						fallbackResponse.results.map((item) => item.data()),
 					);
+					searchResults = searchResults.map((item) => ({
+						...item,
+						url: normalizeSearchResultUrl(item.url),
+					}));
 				}
 			}
 		} else if (import.meta.env.DEV) {
