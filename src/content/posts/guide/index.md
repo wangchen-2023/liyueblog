@@ -1,7 +1,7 @@
 ---
-title: Simple Guides for Fuwari
+title: 你好呀,感谢你能来看看
 published: 2024-04-01
-description: "How to use this blog template."
+description: "小璃的互联网小窝！这里装满了我的热爱、脑洞和碎碎念，记得常来玩呀~"
 image: "./cover.jpeg"
 tags: ["Fuwari", "Blogging", "Customization"]
 category: Guides
