@@ -9,7 +9,8 @@ tags:
   - "随笔"
 category: "技术"
 draft: false
-trashed: false
+trashed: true
+trashedAt: "2026-04-23T07:41:38.730Z"
 ---
 
 最近给博客断断续续补了一些小功能，比如本地编辑、垃圾桶、批量操作，还有一些看起来不起眼的交互修整。
