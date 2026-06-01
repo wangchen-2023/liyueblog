@@ -11,10 +11,11 @@ draft: false
 
 ## 1. 开通 Cloudflare R2
 
-R2 首次开通通常需要绑定支付方式。进入 Cloudflare 控制台后，打开 `R2 对象存储`，按引导完成开通。
+R2 首次开通通常需要绑定支付方式,需要一张银行卡绑定（国内卡不太清楚）。
+进入 Cloudflare 控制台后，打开 `R2 对象存储`，按引导完成开通。
 
 ![开通R2 ](https://raw.githubusercontent.com/wangchen-2023/liyueblog/main/public/uploads/editor/2026/05/10/1-1778440125030-50zzmo6x.png)
-![R2 免费额度说明](https://raw.githubusercontent.com/wangchen-2023/liyueblog/main/public/uploads/editor/2026/05/10/2-1778440144627-1keg6scj.png)![](https://raw.githubusercontent.com/wangchen-2023/liyueblog/main/public/uploads/editor/2026/05/10/2-1778440147703-urxwarf1.png)
+![](https://raw.githubusercontent.com/wangchen-2023/liyueblog/main/public/uploads/editor/2026/05/10/2-1778440147703-urxwarf1.png)
 
 ## 2\. 创建存储桶并绑定自定义域
 
